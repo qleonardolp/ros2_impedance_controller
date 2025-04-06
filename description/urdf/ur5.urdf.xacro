@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="ur5_robot">
+  <xacro:arg name="use_gazebo" default="true" />
+
+  <xacro:include filename="$(find ros2_impedance_controller)/description/urdf/ur5_description.urdf.xacro" />
+
+  <xacro:include filename="$(find ros2_impedance_controller)/description/ros2_control/ur5.ros2_control.xacro" />
+
+
+  <!-- Used for fixing robot -->
+  <link name="world"/>
+
+  <xacro:ur5_robot parent="world">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </xacro:ur5_robot>
+
+  <xacro:ur5_control name="UR5RobotSystem" use_gazebo="$(arg use_gazebo)"/>
+  
+  <xacro:if value="$(arg use_gazebo)">
+    <xacro:include filename="$(find ros2_impedance_controller)/description/gazebo/ur5.gazebo.xacro" />
+    <xacro:ur5_gazebo/>
+  </xacro:if>
+
+</robot>

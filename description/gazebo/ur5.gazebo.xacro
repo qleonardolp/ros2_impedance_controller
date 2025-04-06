@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:macro name="ur5_gazebo">
+
+    <gazebo>
+      <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(find ros2_impedance_controller)/config/controllers.yaml</parameters>
+      </plugin>
+    </gazebo>
+
+    <gazebo reference="base_link"/>
+    <gazebo reference="shoulder_link"/>
+    <gazebo reference="upper_arm_link"/>
+    <gazebo reference="forearm_link"/>
+    <gazebo reference="wrist_1_link"/>
+    <gazebo reference="wrist_2_link"/>
+    <gazebo reference="wrist_3_link"/>
+    <gazebo reference="ee_link"/>
+
+  </xacro:macro>
+
+</robot>
