@@ -1,10 +1,10 @@
-# Copyright (c) 2025, qleonardolp
+# Copyright 2025 qleonardolp
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http:#www.apache.org/licenses/LICENSE-2.0
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,12 +16,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import (
-    Command,
-    FindExecutable,
-    PathJoinSubstitution,
-    LaunchConfiguration
-)
+from launch.substitutions import Command, FindExecutable, PathJoinSubstitution, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -52,8 +47,8 @@ def generate_launch_description():
             starts gazebo in server mode using Rviz2 as graphical interface.",
         )
     )
-    
-     # Initialize Arguments
+
+    # Initialize Arguments
     robot_model = LaunchConfiguration("robot")
     gz_gui = LaunchConfiguration("gz_gui")
 
@@ -101,11 +96,7 @@ def generate_launch_description():
             PathJoinSubstitution([FindExecutable(name="xacro")]),
             " ",
             PathJoinSubstitution(
-                [
-                    FindPackageShare("ros2_impedance_controller"),
-                    "description",
-                    "urdf",
-                    robot_model]
+                [FindPackageShare("ros2_impedance_controller"), "description", "urdf", robot_model]
             ),
             " ",
             "use_gazebo:=true",
@@ -120,13 +111,9 @@ def generate_launch_description():
             "controllers.yaml",
         ]
     )
-    
+
     rviz_config = PathJoinSubstitution(
-        [
-            FindPackageShare("ros2_impedance_controller"),
-            "config",
-            "rviz2.rviz"
-        ]
+        [FindPackageShare("ros2_impedance_controller"), "config", "rviz2.rviz"]
     )
 
     robot_state_publisher = Node(
@@ -143,7 +130,7 @@ def generate_launch_description():
             "joint_state_broadcaster",
             "ros2_impedance_controller",
             "--param-file",
-            controllers
+            controllers,
         ],
     )
     rviz = Node(
