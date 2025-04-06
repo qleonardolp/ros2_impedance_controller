@@ -16,7 +16,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, FindExecutable, PathJoinSubstitution, LaunchConfiguration
+from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -25,6 +25,21 @@ def generate_launch_description():
 
     # Declare arguments
     declared_arguments = []
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "debug",
+            default_value="false",
+            description="Attach gdbserver to the controller manager node.",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "gz_gui",
+            default_value="false",
+            description="Start Gazebo GUI. The default behavior \
+            starts gazebo in server mode using Rviz2 as graphical interface.",
+        )
+    )
     declared_arguments.append(
         DeclareLaunchArgument(
             "robot",
@@ -36,19 +51,11 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "use_gazebo",
             default_value="true",
-            description="Robot model.",
-        )
-    )
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "gz_gui",
-            default_value="false",
-            description="Start Gazebo GUI. The default behavior \
-            starts gazebo in server mode using Rviz2 as graphical interface.",
         )
     )
 
     # Initialize Arguments
+    debug = LaunchConfiguration("debug")
     robot_model = LaunchConfiguration("robot")
     gz_gui = LaunchConfiguration("gz_gui")
 
@@ -123,6 +130,17 @@ def generate_launch_description():
         parameters=[robot_description],
     )
 
+    controller_manager = Node(
+        package="controller_manager",
+        executable="ros2_control_node",
+        parameters=[controllers],
+        output="both",
+        emulate_tty=True,
+        remappings=[("~/robot_description", "/robot_description")],
+        prefix=["gdbserver localhost:3000"],
+        condition=IfCondition(debug),
+    )
+
     controllers_spawner = Node(
         package="controller_manager",
         executable="spawner",
@@ -148,6 +166,7 @@ def generate_launch_description():
         gazebo_bridge,
         robot_state_publisher,
         gz_spawn_entity,
+        controller_manager,
         controllers_spawner,
         rviz,
     ]

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(ros2_impedance_controller LANGUAGES CXX)
 
+set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+
 find_package(ros2_control_cmake REQUIRED)
 set_compiler_options()
 
