@@ -1,0 +1,9 @@
+<library path="ros2_impedance_controller">
+  <class name="ros2_impedance_controller/ImpedanceController"
+         type="ros2_impedance_controller::ImpedanceController"
+         base_class_type="controller_interface::ControllerInterface">
+  <description>
+    Robot impedance controller designed with the ros2_controllers framework and DART (Gazebo physics library).
+  </description>
+  </class>
+</library>
