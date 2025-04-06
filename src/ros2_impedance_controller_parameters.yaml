@@ -1,0 +1,21 @@
+ros2_impedance_controller:
+  joints: {
+    type: string_array,
+    default_value: [],
+    description: "Name of the joints to control.",
+}
+  base_link: {
+    type: string,
+    default_value: "",
+    description: "Name of the link used for kinematic reference.",
+}
+  interaction_link: {
+    type: string,
+    default_value: "",
+    description: "Name of the link used for interaction port, usually is the robot end effector.",
+}
+  degrees_of_freedom: {
+    type: int,
+    default_value: 6,
+    description: "Expected degrees of freedom (joints) between the base_link and the interaction_link. It is updated according the parsed URDF.",
+  }
