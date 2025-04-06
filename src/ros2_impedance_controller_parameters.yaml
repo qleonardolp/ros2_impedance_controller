@@ -3,19 +3,29 @@ ros2_impedance_controller:
     type: string_array,
     default_value: [],
     description: "Name of the joints to control.",
-}
+  }
   base_link: {
     type: string,
     default_value: "",
     description: "Name of the link used for kinematic reference.",
-}
+  }
   interaction_link: {
     type: string,
     default_value: "",
     description: "Name of the link used for interaction port, usually is the robot end effector.",
-}
+  }
   degrees_of_freedom: {
     type: int,
     default_value: 6,
     description: "Expected degrees of freedom (joints) between the base_link and the interaction_link. It is updated according the parsed URDF.",
+  }
+  stiffness: {
+    type: double_array,
+    default_value: [250.0, 250.0, 250.0, 10.0, 10.0, 10.0],
+    description: "Cartesian stiffness gains [N/m, N/m, N/m, Nm/rad, Nm/rad, Nm/rad]",
+  }
+  damping: {
+    type: double_array,
+    default_value: [15.0, 15.0, 15.0, 3.0, 3.0, 3.0],
+    description: "Cartesian damping gains [N.s/m, N.s/m, N.s/m, Nm.s/rad, Nm.s/rad, Nm.s/rad]",
   }

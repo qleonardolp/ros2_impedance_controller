@@ -1,12 +1,26 @@
 controller_manager:
   ros__parameters:
-    update_rate: 200  # Hz
+    update_rate: 250  # Hz
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
 
 
 ros2_impedance_controller:
+  ros__parameters:
+    type: ros2_impedance_controller/ImpedanceController
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_joint
+      - wrist_1_joint
+      - wrist_2_joint
+      - wrist_3_joint
+    base_link: base_link
+    interaction_link: ee_link
+    degrees_of_freedom: 6
+
+forward_effort_controller:
   ros__parameters:
     type: forward_command_controller/ForwardCommandController
     joints:
