@@ -14,6 +14,9 @@
 
 #include "ros2_impedance_controller/ros2_impedance_controller.hpp"
 
+#include <chrono>
+
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "controller_interface/helpers.hpp"
 #include "hardware_interface/loaned_command_interface.hpp"
 #include "rclcpp/logging.hpp"
@@ -65,6 +68,9 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
   {
     return ret;
   }
+
+  parameters_client_ =
+    std::make_shared<rclcpp::AsyncParametersClient>(get_node(), "/robot_state_publisher");
 
   if (!configure_robot_model())
   {
@@ -139,13 +145,17 @@ controller_interface::return_type ImpedanceController::update(
 bool ImpedanceController::configure_robot_model()
 {
   dart::utils::DartLoader loader;
-  std::string urdf_string;
-  if (!get_node()->get_parameter("robot_description", urdf_string))  // FIX: is failing
-  {
-    RCLCPP_ERROR(get_node()->get_logger(), "Failed to get robot description parameter");
-    return false;
-  }
-  robot_skeleton_ = loader.parseSkeletonString(urdf_string, "");
+  std::string share_dir = ament_index_cpp::get_package_share_directory("ros2_impedance_controller");
+  loader.addPackageDirectory("ros2_impedance_controller", share_dir);
+
+  parameters_client_->wait_for_service();
+  auto parameters_future = parameters_client_->get_parameters(
+    {"robot_description"},
+    std::bind(&ImpedanceController::robot_description_param_cb, this, std::placeholders::_1));
+
+  parameters_future.wait_for(std::chrono::seconds(5));  // TODO(@me): fix determinism
+
+  robot_skeleton_ = loader.parseSkeletonString(robot_urdf_, "");
   robot_base_ = robot_skeleton_->getBodyNode(params_.base_link);
   robot_end_effector_ = robot_skeleton_->getBodyNode(params_.interaction_link);
 
@@ -157,6 +167,12 @@ bool ImpedanceController::configure_robot_model()
   degrees_of_freedom_ = static_cast<int>(robot_skeleton_->getNumDofs());
   RCLCPP_INFO(get_node()->get_logger(), "Robot model loaded with %d DOFs", degrees_of_freedom_);
   return true;
+}
+
+void ImpedanceController::robot_description_param_cb(
+  std::shared_future<std::vector<rclcpp::Parameter>> future)
+{
+  robot_urdf_ = future.get().at(0).as_string();
 }
 
 void ImpedanceController::declare_parameters()

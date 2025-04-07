@@ -5,6 +5,7 @@ find_package(ros2_control_cmake REQUIRED)
 set_compiler_options()
 
 set(DEPENDENCIES
+  ament_index_cpp
   controller_interface
   Eigen3
   geometry_msgs

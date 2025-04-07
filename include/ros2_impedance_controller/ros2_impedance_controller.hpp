@@ -25,6 +25,7 @@
 #include <dart/utils/urdf/DartLoader.hpp>
 #include "controller_interface/controller_interface.hpp"
 #include "geometry_msgs/msg/pose.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include "rclcpp/subscription.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 #include "realtime_tools/realtime_buffer.hpp"
@@ -83,6 +84,12 @@ protected:
 
   std::shared_ptr<ParamListener> param_listener_;
   Params params_;
+
+private:
+  void robot_description_param_cb(std::shared_future<std::vector<rclcpp::Parameter>> future);
+
+  std::shared_ptr<rclcpp::AsyncParametersClient> parameters_client_;
+  std::string robot_urdf_;
 
   std::vector<std::string> joint_names_;
   std::vector<std::string> command_interface_types_;
