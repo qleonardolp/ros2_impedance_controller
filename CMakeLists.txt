@@ -15,7 +15,6 @@ set(DEPENDENCIES
   rclcpp
   rclcpp_lifecycle
   realtime_tools
-  std_msgs
 )
 
 find_package(ament_cmake REQUIRED)
