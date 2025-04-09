@@ -196,6 +196,32 @@ bool ImpedanceController::configure_robot_model()
   return true;
 }
 
+bool ImpedanceController::update_robot_model_states()
+{
+  bool success = true;
+  for (auto & state_interface : state_interfaces_)
+  {
+    auto joint_name = state_interface.get_prefix_name();
+    auto interface_type = state_interface.get_interface_name();
+
+    std::optional state = state_interface.get_optional();
+
+    if (state.has_value())
+    {
+      // use a map...
+      if (interface_type.c_str() == hardware_interface::HW_IF_POSITION)
+      {
+        robot_skeleton_->getDof(joint_name)->setPosition(state.value());
+      }
+    }
+    else
+    {
+      success = success && false;
+    }
+  }
+  return success;
+}
+
 void ImpedanceController::robot_description_param_cb(
   std::shared_future<std::vector<rclcpp::Parameter>> future)
 {

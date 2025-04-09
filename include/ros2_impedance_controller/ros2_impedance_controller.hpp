@@ -72,6 +72,8 @@ public:
 protected:
   bool configure_robot_model();
 
+  bool update_robot_model_states();
+
   void declare_parameters();
 
   controller_interface::CallbackReturn read_parameters();
