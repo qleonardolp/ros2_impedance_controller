@@ -141,17 +141,17 @@ def generate_launch_description():
         condition=IfCondition(debug),
     )
 
-    joint_state_broadcaster = Node(
+    joint_state_broadcaster_spawner = Node(
         package="controller_manager",
         executable="spawner",
         arguments=["joint_state_broadcaster"],
     )
 
-    ros2_impedance_controller = Node(
+    impedance_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
         arguments=[
-            "ros2_impedance_controller",
+            "impedance_controller",
             "--inactive",
             "--param-file",
             controllers,
@@ -173,8 +173,8 @@ def generate_launch_description():
         robot_state_publisher,
         gz_spawn_entity,
         controller_manager,
-        joint_state_broadcaster,
-        ros2_impedance_controller,
+        joint_state_broadcaster_spawner,
+        impedance_controller_spawner,
         rviz,
     ]
 
