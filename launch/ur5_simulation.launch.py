@@ -36,8 +36,8 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "gz_gui",
             default_value="false",
-            description="Start Gazebo GUI. The default behavior \
-            starts gazebo in server mode using Rviz2 as graphical interface.",
+            description="Start Gazebo GUI. The default behavior"
+            + " starts gazebo in server mode using Rviz2 as graphical interface.",
         )
     )
     declared_arguments.append(
