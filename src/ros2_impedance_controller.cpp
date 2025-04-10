@@ -19,7 +19,6 @@
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "controller_interface/helpers.hpp"
 #include "hardware_interface/loaned_command_interface.hpp"
-#include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/qos.hpp"
 
@@ -143,7 +142,12 @@ controller_interface::CallbackReturn ImpedanceController::on_deactivate(
 controller_interface::return_type ImpedanceController::update(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-  // TODO(myself): Read state_interfaces_[0].get_optional() ...
+  // Read state interfaces and update robot
+  if (!update_robot_model_states())
+  {
+    RCLCPP_ERROR(get_node()->get_logger(), "Failed to update robot model");
+    return controller_interface::return_type::ERROR;
+  }
 
   auto new_end_effector_reference = rt_reference_ptr_.readFromRT();
 
@@ -159,6 +163,7 @@ controller_interface::return_type ImpedanceController::update(
   {
     set_value_success = command_interface.set_value(0.0);  // is working
   }
+  // set_value_success = command_interfaces_[0].set_value(60.0);
 
   if (!set_value_success)
   {
@@ -180,7 +185,11 @@ bool ImpedanceController::configure_robot_model()
     {"robot_description"},
     std::bind(&ImpedanceController::robot_description_param_cb, this, std::placeholders::_1));
 
-  parameters_future.wait_for(std::chrono::seconds(5));  // TODO(myself): fix determinism
+  parameters_future.wait();
+
+  while (robot_urdf_.empty())
+  {
+  }
 
   robot_skeleton_ = loader.parseSkeletonString(robot_urdf_, "");
   robot_base_ = robot_skeleton_->getBodyNode(params_.base_link);
@@ -202,20 +211,28 @@ bool ImpedanceController::update_robot_model_states()
   for (auto & state_interface : state_interfaces_)
   {
     auto joint_name = state_interface.get_prefix_name();
-    auto interface_type = state_interface.get_interface_name();
-
     std::optional state = state_interface.get_optional();
 
     if (state.has_value())
     {
-      // use a map...
-      if (interface_type.c_str() == hardware_interface::HW_IF_POSITION)
+      switch (InterfaceMap[state_interface.get_interface_name()])
       {
-        robot_skeleton_->getDof(joint_name)->setPosition(state.value());
+        case InterfaceType::POSITION:
+          robot_skeleton_->getDof(joint_name)->setPosition(state.value());
+          break;
+        case InterfaceType::VELOCITY:
+          robot_skeleton_->getDof(joint_name)->setVelocity(state.value());
+          break;
+        case InterfaceType::EFFORT:
+          robot_skeleton_->getDof(joint_name)->setForce(state.value());
+          break;
+        default:
+          break;
       }
     }
     else
     {
+      // at least one failure unset the flag
       success = success && false;
     }
   }

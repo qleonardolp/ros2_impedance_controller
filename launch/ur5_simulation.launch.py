@@ -53,11 +53,20 @@ def generate_launch_description():
             default_value="true",
         )
     )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "controller_name",
+            default_value="impedance_controller",
+            description="Name of the controller. Useful to debug using the"
+            + " 'forward_effort_controller' instead of the impedance controller.",
+        )
+    )
 
     # Initialize Arguments
     debug = LaunchConfiguration("debug")
     robot_model = LaunchConfiguration("robot")
     gz_gui = LaunchConfiguration("gz_gui")
+    controller_name = LaunchConfiguration("controller_name")
 
     # gazebo
     gazebo = IncludeLaunchDescription(
@@ -151,7 +160,7 @@ def generate_launch_description():
         package="controller_manager",
         executable="spawner",
         arguments=[
-            "impedance_controller",
+            controller_name,
             "--inactive",
             "--param-file",
             controllers,

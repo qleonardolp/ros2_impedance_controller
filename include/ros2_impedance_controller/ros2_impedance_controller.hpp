@@ -19,12 +19,14 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <dart/dart.hpp>
 #include <dart/utils/urdf/DartLoader.hpp>
 #include "controller_interface/controller_interface.hpp"
 #include "geometry_msgs/msg/pose.hpp"
+#include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/subscription.hpp"
 #include "rclcpp_lifecycle/state.hpp"
@@ -38,6 +40,19 @@ namespace ros2_impedance_controller
 using ReferenceType = geometry_msgs::msg::Pose;
 using Matrix6d = Eigen::Matrix<double, 6, 6>;
 using Vector6d = Eigen::Matrix<double, 6, 1>;
+
+enum InterfaceType : uint8_t
+{
+  POSITION,
+  VELOCITY,
+  EFFORT
+};
+
+std::unordered_map<std::string, InterfaceType> InterfaceMap = {
+  {hardware_interface::HW_IF_POSITION, InterfaceType::POSITION},
+  {hardware_interface::HW_IF_VELOCITY, InterfaceType::VELOCITY},
+  {hardware_interface::HW_IF_EFFORT, InterfaceType::EFFORT},
+};
 
 /**
  * \brief Cartesian Impedance Controller for Manipulators.

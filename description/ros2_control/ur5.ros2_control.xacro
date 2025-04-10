@@ -16,42 +16,54 @@
 
       <joint name="shoulder_pan_joint">
         <command_interface name="effort"/>
-        <state_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">-0.357</param>
+        </state_interface>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
       <joint name="shoulder_lift_joint">
         <command_interface name="effort"/>
-        <state_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">-0.7854</param>
+        </state_interface>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
       <joint name="elbow_joint">
         <command_interface name="effort"/>
-        <state_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">-2.000</param>
+        </state_interface>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
       <joint name="wrist_1_joint">
         <command_interface name="effort"/>
-        <state_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">-0.357</param>
+        </state_interface>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
       <joint name="wrist_2_joint">
         <command_interface name="effort"/>
-        <state_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">1.5708</param>
+        </state_interface>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
 
       <joint name="wrist_3_joint">
         <command_interface name="effort"/>
-        <state_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
