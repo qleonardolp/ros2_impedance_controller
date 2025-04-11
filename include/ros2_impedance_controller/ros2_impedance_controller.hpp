@@ -26,6 +26,8 @@
 #include <dart/utils/urdf/DartLoader.hpp>
 #include "controller_interface/controller_interface.hpp"
 #include "geometry_msgs/msg/pose.hpp"
+#include "hardware_interface/loaned_command_interface.hpp"
+#include "hardware_interface/loaned_state_interface.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/subscription.hpp"
@@ -105,6 +107,12 @@ private:
   std::vector<std::string> joint_names_;
   std::vector<std::string> command_interface_types_;
   std::vector<std::string> state_interface_types_;
+
+  std::vector<std::reference_wrapper<hardware_interface::LoanedCommandInterface>>
+    ordered_cmd_interfaces_;
+
+  std::vector<std::reference_wrapper<hardware_interface::LoanedStateInterface>>
+    ordered_state_interfaces_;
 
   bool has_effort_states_{true};
 

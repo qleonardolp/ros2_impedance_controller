@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="ur5_control" params="name use_gazebo:=^|true">
+  <xacro:macro name="ur5_control" params="use_gazebo:=^|true">
 
-    <ros2_control name="${name}" type="system">
+    <ros2_control name="GazeboSimSystem" type="system">
       <hardware>
         <xacro:if value="${use_gazebo}">
           <plugin>gz_ros2_control/GazeboSimSystem</plugin>

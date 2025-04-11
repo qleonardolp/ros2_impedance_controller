@@ -18,7 +18,6 @@
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "controller_interface/helpers.hpp"
-#include "hardware_interface/loaned_command_interface.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/qos.hpp"
 
@@ -87,31 +86,25 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
 controller_interface::CallbackReturn ImpedanceController::on_activate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  std::vector<std::reference_wrapper<hardware_interface::LoanedCommandInterface>>
-    ordered_cmd_interfaces;
-
   bool interfaces_provided = controller_interface::get_ordered_interfaces(
     command_interfaces_,  // LoanedCommandInterface from the base class
-    command_interface_types_, std::string(""), ordered_cmd_interfaces);
+    command_interface_types_, std::string(""), ordered_cmd_interfaces_);
 
   if (!interfaces_provided)
   {
     RCLCPP_ERROR(
       get_node()->get_logger(), "Expected %zu command interfaces, got %zu",
-      command_interface_types_.size(), ordered_cmd_interfaces.size());
+      command_interface_types_.size(), ordered_cmd_interfaces_.size());
     return controller_interface::CallbackReturn::ERROR;
   }
-
-  std::vector<std::reference_wrapper<hardware_interface::LoanedStateInterface>>
-    ordered_state_interfaces;
 
   size_t minimal_states_size = params_.joints.size() * 2;  // positions and velocities
 
   interfaces_provided = controller_interface::get_ordered_interfaces(
     state_interfaces_,  // LoanedStateInterface from the base class
-    state_interface_types_, std::string(""), ordered_state_interfaces);
+    state_interface_types_, std::string(""), ordered_state_interfaces_);
 
-  size_t ordered_states_size = ordered_state_interfaces.size();
+  size_t ordered_states_size = ordered_state_interfaces_.size();
 
   has_effort_states_ = !(ordered_states_size == minimal_states_size);
 
@@ -121,7 +114,7 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   {
     RCLCPP_ERROR(
       get_node()->get_logger(), "Expected %zu state interfaces or %zu without effort, got %zu",
-      state_interface_types_.size(), minimal_states_size, ordered_state_interfaces.size());
+      state_interface_types_.size(), minimal_states_size, ordered_state_interfaces_.size());
     return controller_interface::CallbackReturn::ERROR;
   }
 
@@ -135,6 +128,8 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
 controller_interface::CallbackReturn ImpedanceController::on_deactivate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
+  ordered_cmd_interfaces_.clear();
+  ordered_state_interfaces_.clear();
   rt_reference_ptr_ = realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>>(nullptr);
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -149,6 +144,9 @@ controller_interface::return_type ImpedanceController::update(
     return controller_interface::return_type::ERROR;
   }
 
+  Eigen::VectorXd joint_positions = robot_skeleton_->getPositions();
+  Eigen::VectorXd joint_velocities = robot_skeleton_->getVelocities();
+
   auto new_end_effector_reference = rt_reference_ptr_.readFromRT();
 
   if (!new_end_effector_reference || !(*new_end_effector_reference))
@@ -156,21 +154,14 @@ controller_interface::return_type ImpedanceController::update(
     return controller_interface::return_type::OK;
   }
 
-  bool set_value_success = true;
-
-  // TODO(myself): check order to match the joints
-  for (auto & command_interface : command_interfaces_)
+  for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
-    set_value_success = command_interface.set_value(0.0);  // is working
+    if (!ordered_cmd_interfaces_[k].get().set_value(23.45))  // is NOT working
+    {
+      RCLCPP_ERROR(get_node()->get_logger(), "Failed to set command interface value");
+      return controller_interface::return_type::ERROR;
+    }
   }
-  // set_value_success = command_interfaces_[0].set_value(60.0);
-
-  if (!set_value_success)
-  {
-    RCLCPP_ERROR(get_node()->get_logger(), "Failed to set command interface value");
-    return controller_interface::return_type::ERROR;
-  }
-
   return controller_interface::return_type::OK;
 }
 
@@ -207,36 +198,30 @@ bool ImpedanceController::configure_robot_model()
 
 bool ImpedanceController::update_robot_model_states()
 {
-  bool success = true;
-  for (auto & state_interface : state_interfaces_)
+  for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
-    auto joint_name = state_interface.get_prefix_name();
-    std::optional state = state_interface.get_optional();
+    std::optional position = ordered_state_interfaces_[k].get().get_optional();
+    std::optional velocity = ordered_state_interfaces_[k + 1].get().get_optional();
 
-    if (state.has_value())
+    if (!position.has_value() || !velocity.has_value())
     {
-      switch (InterfaceMap[state_interface.get_interface_name()])
-      {
-        case InterfaceType::POSITION:
-          robot_skeleton_->getDof(joint_name)->setPosition(state.value());
-          break;
-        case InterfaceType::VELOCITY:
-          robot_skeleton_->getDof(joint_name)->setVelocity(state.value());
-          break;
-        case InterfaceType::EFFORT:
-          robot_skeleton_->getDof(joint_name)->setForce(state.value());
-          break;
-        default:
-          break;
-      }
+      return false;
     }
-    else
+
+    robot_skeleton_->getDof(k)->setPosition(position.value());
+    robot_skeleton_->getDof(k)->setVelocity(velocity.value());
+
+    if (has_effort_states_)
     {
-      // at least one failure unset the flag
-      success = success && false;
+      std::optional effort = ordered_state_interfaces_[k + 2].get().get_optional();
+      if (!effort.has_value())
+      {
+        return false;
+      }
+      robot_skeleton_->getDof(k)->setForce(effort.value());
     }
   }
-  return success;
+  return true;
 }
 
 void ImpedanceController::robot_description_param_cb(
