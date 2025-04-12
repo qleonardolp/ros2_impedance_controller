@@ -147,16 +147,9 @@ controller_interface::return_type ImpedanceController::update(
   Eigen::VectorXd joint_positions = robot_skeleton_->getPositions();
   Eigen::VectorXd joint_velocities = robot_skeleton_->getVelocities();
 
-  auto new_end_effector_reference = rt_reference_ptr_.readFromRT();
-
-  if (!new_end_effector_reference || !(*new_end_effector_reference))
-  {
-    return controller_interface::return_type::OK;
-  }
-
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
-    if (!ordered_cmd_interfaces_[k].get().set_value(23.45))  // is NOT working
+    if (!ordered_cmd_interfaces_[k].get().set_value(23.45 * (5 - k)))
     {
       RCLCPP_ERROR(get_node()->get_logger(), "Failed to set command interface value");
       return controller_interface::return_type::ERROR;
