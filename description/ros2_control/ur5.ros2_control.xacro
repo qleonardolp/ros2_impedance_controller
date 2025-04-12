@@ -3,7 +3,7 @@
 
   <xacro:macro name="ur5_control" params="use_gazebo:=^|true">
 
-    <ros2_control name="GazeboSimSystem" type="system">
+    <ros2_control name="UR5RobotSystem" type="system">
       <hardware>
         <xacro:if value="${use_gazebo}">
           <plugin>gz_ros2_control/GazeboSimSystem</plugin>
