@@ -18,6 +18,8 @@ impedance_controller:
       - wrist_3_joint
     base_link: base_link
     interaction_link: ee_link
+    stiffness: [1000.0, 1000.0, 1000.0, 60.0, 60.0, 60.0]
+    damping: [50.0, 100.0, 100.0, 7.0, 7.0, 7.0]
     degrees_of_freedom: 6
 
 forward_effort_controller:

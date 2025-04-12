@@ -76,6 +76,9 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     return controller_interface::CallbackReturn::ERROR;
   }
 
+  joint_positions_ = JointSpaceVector::Zero();
+  joint_velocities_ = JointSpaceVector::Zero();
+
   reference_subscriber_ = get_node()->create_subscription<ReferenceType>(
     "~/reference", rclcpp::SystemDefaultsQoS(),
     [this](const ReferenceType::SharedPtr msg) { rt_reference_ptr_.writeFromNonRT(msg); });
@@ -144,12 +147,34 @@ controller_interface::return_type ImpedanceController::update(
     return controller_interface::return_type::ERROR;
   }
 
-  Eigen::VectorXd joint_positions = robot_skeleton_->getPositions();
-  Eigen::VectorXd joint_velocities = robot_skeleton_->getVelocities();
+  // Compute the Jacobian
+  dart::math::Jacobian end_effector_jacobian = robot_end_effector_->getJacobian(robot_base_);
+  // Compute the pseudo-inverse of the Jacobian
+  Eigen::MatrixXd pinv_end_effector_jacobian =
+    end_effector_jacobian.transpose() * (end_effector_jacobian * end_effector_jacobian.transpose() +
+                                         0.002 * Eigen::Matrix6d::Identity())
+                                          .inverse();
+
+  const Eigen::VectorXd & gravity_forces = robot_skeleton_->getGravityForces();
+
+  Eigen::Vector6d deviation;
+  deviation.tail<3>() = desired_frame_->getTransform(robot_base_).translation() -
+                        robot_end_effector_->getTransform(robot_base_).translation();
+
+  Eigen::AngleAxisd angle_axis(desired_frame_->getTransform(robot_end_effector_).linear());
+  deviation.head<3>() = angle_axis.angle() * angle_axis.axis();
+
+  // Compute the time derivative of the error
+  Eigen::Vector6d deviation_derivative =
+    -robot_end_effector_->getSpatialVelocity(desired_frame_.get(), robot_base_);
+
+  desired_effort_ = gravity_forces +
+                    end_effector_jacobian.transpose() * (taskspace_stiffness_ * deviation +
+                                                         taskspace_damping_ * deviation_derivative);
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
-    if (!ordered_cmd_interfaces_[k].get().set_value(23.45 * (5 - k)))
+    if (!ordered_cmd_interfaces_[k].get().set_value(desired_effort_(k)))
     {
       RCLCPP_ERROR(get_node()->get_logger(), "Failed to set command interface value");
       return controller_interface::return_type::ERROR;
@@ -184,6 +209,16 @@ bool ImpedanceController::configure_robot_model()
     RCLCPP_ERROR(get_node()->get_logger(), "Could not find specified links in skeleton");
     return false;
   }
+  // Rotate root joint to align with z direction
+  robot_skeleton_->getRootJoint()->setTransformFromParentBodyNode(Eigen::Isometry3d::Identity());
+
+  desired_frame_ = std::make_shared<dart::dynamics::SimpleFrame>(robot_base_->getParentFrame());
+
+  Eigen::Isometry3d desired_pose(Eigen::Isometry3d::Identity());
+  desired_pose.translation() = Eigen::Vector3d(0.6594, -0.10914, 0.62103);
+  desired_frame_->setTransform(
+    desired_pose, robot_base_);  // TODO(qleonardolp): set the new transform
+
   degrees_of_freedom_ = robot_skeleton_->getNumDofs();
   RCLCPP_INFO(get_node()->get_logger(), "Robot model loaded with %zu DOFs", degrees_of_freedom_);
   return true;
@@ -203,6 +238,9 @@ bool ImpedanceController::update_robot_model_states()
 
     robot_skeleton_->getDof(k)->setPosition(position.value());
     robot_skeleton_->getDof(k)->setVelocity(velocity.value());
+
+    joint_positions_(k) = position.value();
+    joint_velocities_(k) = velocity.value();
 
     if (has_effort_states_)
     {
@@ -247,6 +285,15 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     state_interface_types_.push_back(joint + "/" + hardware_interface::HW_IF_VELOCITY);
     state_interface_types_.push_back(joint + "/" + hardware_interface::HW_IF_EFFORT);
   }
+
+  if (params_.stiffness.empty() || params_.damping.empty())
+  {
+    RCLCPP_ERROR(get_node()->get_logger(), "Stiffness or damping array parameters were empty");
+    return controller_interface::CallbackReturn::ERROR;
+  }
+
+  taskspace_stiffness_.diagonal() = Eigen::Vector6d(params_.stiffness.data());
+  taskspace_damping_.diagonal() = Eigen::Vector6d(params_.damping.data());
 
   return controller_interface::CallbackReturn::SUCCESS;
 }

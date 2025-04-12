@@ -40,8 +40,16 @@
 namespace ros2_impedance_controller
 {
 using ReferenceType = geometry_msgs::msg::Pose;
-using Matrix6d = Eigen::Matrix<double, 6, 6>;
-using Vector6d = Eigen::Matrix<double, 6, 1>;
+
+using DiagonalMatrix6d = Eigen::DiagonalMatrix<double, 6>;
+
+const uint kMaxJointSpaceSize = 16;
+/**
+ * Avoid dynamic allocation in the update loop by using
+ * a large constant sizeEigen::Vector. If the manipulator
+ * has more the 16 DOFs them it should be increased.
+ */
+using JointSpaceVector = Eigen::Matrix<double, kMaxJointSpaceSize, 1>;
 
 enum InterfaceType : uint8_t
 {
@@ -123,14 +131,22 @@ private:
   std::string interaction_link_;
   size_t degrees_of_freedom_{1};
 
-  /* Controller Stiffness and Damping */
-  Eigen::Matrix6d stiffness_matrix_;
-  Eigen::Matrix6d damping_matrix_;
+  /* Task space stiffness and damping */
+  DiagonalMatrix6d taskspace_stiffness_;
+  DiagonalMatrix6d taskspace_damping_;
+
+  JointSpaceVector joint_positions_;
+  JointSpaceVector joint_velocities_;
+
+  Eigen::VectorXd desired_effort_;
 
   /* DART members */
   dart::dynamics::SkeletonPtr robot_skeleton_;
   dart::dynamics::BodyNodePtr robot_base_;
   dart::dynamics::BodyNodePtr robot_end_effector_;
+
+  /// The equilibrium (target) pose for the impedance model
+  dart::dynamics::SimpleFramePtr desired_frame_;
 
   /* Controller Reference Subscriber */
   realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>> rt_reference_ptr_;
