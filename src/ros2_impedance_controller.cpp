@@ -157,6 +157,12 @@ controller_interface::return_type ImpedanceController::update(
 
   const Eigen::VectorXd & gravity_forces = robot_skeleton_->getGravityForces();
 
+  if (debug_gravity_)
+  {
+    RCLCPP_WARN_STREAM(get_node()->get_logger(), "Gravity Forces " << gravity_forces);
+    debug_gravity_ = false;
+  }
+
   Eigen::Vector6d deviation;
   deviation.tail<3>() = desired_frame_->getTransform(robot_base_).translation() -
                         robot_end_effector_->getTransform(robot_base_).translation();
@@ -221,12 +227,20 @@ bool ImpedanceController::configure_robot_model()
 
   degrees_of_freedom_ = robot_skeleton_->getNumDofs();
   RCLCPP_INFO(get_node()->get_logger(), "Robot model loaded with %zu DOFs", degrees_of_freedom_);
+
+  for (uint8_t i = 0; i < degrees_of_freedom_; i++)
+  {
+    RCLCPP_INFO(
+      get_node()->get_logger(), "Robot skeleton Dof %zu is joint '%s'",
+      robot_skeleton_->getDof(i)->getIndexInSkeleton(),
+      robot_skeleton_->getDof(i)->getName().c_str());
+  }
   return true;
 }
 
 bool ImpedanceController::update_robot_model_states()
 {
-  for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
+  for (uint8_t k = 0; k < degrees_of_freedom_; k++)
   {
     std::optional position = ordered_state_interfaces_[k].get().get_optional();
     std::optional velocity = ordered_state_interfaces_[k + 1].get().get_optional();

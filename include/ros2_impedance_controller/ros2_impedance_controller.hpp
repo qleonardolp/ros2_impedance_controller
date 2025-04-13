@@ -123,6 +123,7 @@ private:
     ordered_state_interfaces_;
 
   bool has_effort_states_{true};
+  bool debug_gravity_{true};
 
   double update_rate_;
 
