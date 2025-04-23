@@ -226,6 +226,8 @@ bool ImpedanceController::configure_robot_model()
     desired_pose, robot_base_);  // TODO(qleonardolp): set the new transform
 
   degrees_of_freedom_ = robot_skeleton_->getNumDofs();
+  desired_effort_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
+
   RCLCPP_INFO(get_node()->get_logger(), "Robot model loaded with %zu DOFs", degrees_of_freedom_);
 
   for (uint8_t i = 0; i < degrees_of_freedom_; i++)
@@ -266,6 +268,7 @@ bool ImpedanceController::update_robot_model_states()
       robot_skeleton_->getDof(k)->setForce(effort.value());
     }
   }
+  robot_skeleton_->computeForwardKinematics();
   return true;
 }
 
