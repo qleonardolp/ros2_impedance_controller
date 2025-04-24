@@ -97,7 +97,7 @@ public:
 protected:
   bool configure_robot_model();
 
-  bool update_robot_model_states();
+  bool update_robot();
 
   void declare_parameters();
 

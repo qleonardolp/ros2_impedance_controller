@@ -141,9 +141,9 @@ controller_interface::return_type ImpedanceController::update(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
   // Read state interfaces and update robot
-  if (!update_robot_model_states())
+  if (!update_robot())
   {
-    RCLCPP_ERROR(get_node()->get_logger(), "Failed to update robot model");
+    RCLCPP_ERROR(get_node()->get_logger(), "Failed to update robot model with state data");
     return controller_interface::return_type::ERROR;
   }
 
@@ -217,6 +217,7 @@ bool ImpedanceController::configure_robot_model()
   }
   // Rotate root joint to align with z direction
   robot_skeleton_->getRootJoint()->setTransformFromParentBodyNode(Eigen::Isometry3d::Identity());
+  robot_skeleton_->setGravity(Eigen::Vector3d(0.0, 0.0, -9.81));
 
   desired_frame_ = std::make_shared<dart::dynamics::SimpleFrame>(robot_base_->getParentFrame());
 
@@ -240,7 +241,7 @@ bool ImpedanceController::configure_robot_model()
   return true;
 }
 
-bool ImpedanceController::update_robot_model_states()
+bool ImpedanceController::update_robot()
 {
   for (uint8_t k = 0; k < degrees_of_freedom_; k++)
   {
@@ -252,8 +253,8 @@ bool ImpedanceController::update_robot_model_states()
       return false;
     }
 
-    robot_skeleton_->getDof(k)->setPosition(position.value());
-    robot_skeleton_->getDof(k)->setVelocity(velocity.value());
+    robot_skeleton_->setPosition(k, position.value());
+    robot_skeleton_->setVelocity(k, velocity.value());
 
     joint_positions_(k) = position.value();
     joint_velocities_(k) = velocity.value();
@@ -265,7 +266,7 @@ bool ImpedanceController::update_robot_model_states()
       {
         return false;
       }
-      robot_skeleton_->getDof(k)->setForce(effort.value());
+      robot_skeleton_->setForce(k, effort.value());
     }
   }
   robot_skeleton_->computeForwardKinematics();
