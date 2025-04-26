@@ -148,20 +148,9 @@ controller_interface::return_type ImpedanceController::update(
   }
 
   // Compute the Jacobian
-  dart::math::Jacobian end_effector_jacobian = robot_end_effector_->getJacobian(robot_base_);
-  // Compute the pseudo-inverse of the Jacobian
-  Eigen::MatrixXd pinv_end_effector_jacobian =
-    end_effector_jacobian.transpose() * (end_effector_jacobian * end_effector_jacobian.transpose() +
-                                         0.002 * Eigen::Matrix6d::Identity())
-                                          .inverse();
+  dart::math::Jacobian jacobian = robot_end_effector_->getJacobian(robot_base_);
 
-  const Eigen::VectorXd & gravity_forces = robot_skeleton_->getGravityForces();
-
-  if (debug_gravity_)
-  {
-    RCLCPP_WARN_STREAM(get_node()->get_logger(), "Gravity Forces " << gravity_forces);
-    debug_gravity_ = false;
-  }
+  Eigen::VectorXd gravity_forces = robot_skeleton_->getCoriolisAndGravityForces();
 
   Eigen::Vector6d deviation;
   deviation.tail<3>() = desired_frame_->getTransform(robot_base_).translation() -
@@ -174,9 +163,22 @@ controller_interface::return_type ImpedanceController::update(
   Eigen::Vector6d deviation_derivative =
     -robot_end_effector_->getSpatialVelocity(desired_frame_.get(), robot_base_);
 
-  desired_effort_ = gravity_forces +
-                    end_effector_jacobian.transpose() * (taskspace_stiffness_ * deviation +
-                                                         taskspace_damping_ * deviation_derivative);
+  if (debug_gravity_)
+  {
+    RCLCPP_WARN_STREAM(get_node()->get_logger(), "Gravity Forces " << gravity_forces);
+
+    RCLCPP_WARN_STREAM(
+      get_node()->get_logger(), "EE translation " << robot_end_effector_->getTransform(robot_base_)
+                                                       .translation());  // completely wrong
+    RCLCPP_WARN_STREAM(
+      get_node()->get_logger(),
+      "Desired translation " << desired_frame_->getTransform(robot_base_).translation());  // ok
+    debug_gravity_ = false;
+  }
+
+  desired_effort_ =
+    gravity_forces + jacobian.transpose() * (taskspace_stiffness_ * deviation +
+                                             taskspace_damping_ * deviation_derivative);
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
@@ -221,8 +223,8 @@ bool ImpedanceController::configure_robot_model()
 
   desired_frame_ = std::make_shared<dart::dynamics::SimpleFrame>(robot_base_->getParentFrame());
 
-  Eigen::Isometry3d desired_pose(Eigen::Isometry3d::Identity());
-  desired_pose.translation() = Eigen::Vector3d(0.6594, -0.10914, 0.62103);
+  Eigen::Isometry3d desired_pose = Eigen::Isometry3d::Identity();
+  desired_pose.translate(Eigen::Vector3d(0.2500, -0.10915, 0.62103));
   desired_frame_->setTransform(
     desired_pose, robot_base_);  // TODO(qleonardolp): set the new transform
 
@@ -259,7 +261,7 @@ bool ImpedanceController::update_robot()
     joint_positions_(k) = position.value();
     joint_velocities_(k) = velocity.value();
 
-    if (has_effort_states_)
+    if (false)
     {
       std::optional effort = ordered_state_interfaces_[k + 2].get().get_optional();
       if (!effort.has_value())
@@ -270,6 +272,10 @@ bool ImpedanceController::update_robot()
     }
   }
   robot_skeleton_->computeForwardKinematics();
+  robot_skeleton_->clearInternalForces();
+  robot_skeleton_->clearExternalForces();
+  robot_skeleton_->setAccelerations(Eigen::VectorXd::Zero(degrees_of_freedom_));
+  robot_skeleton_->computeInverseDynamics();
   return true;
 }
 
