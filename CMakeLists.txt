@@ -19,7 +19,7 @@ set(DEPENDENCIES
 
 find_package(ament_cmake REQUIRED)
 find_package(backward_ros REQUIRED)
-find_package(DART REQUIRED COMPONENTS utils-urdf)
+find_package(pinocchio REQUIRED)
 
 foreach(Dependency IN ITEMS ${DEPENDENCIES})
   find_package(${Dependency} REQUIRED)
@@ -41,9 +41,10 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
   ros2_impedance_controller_parameters
+  pinocchio::pinocchio
 )
 
-ament_target_dependencies(${PROJECT_NAME} PUBLIC ${DEPENDENCIES} DART)
+ament_target_dependencies(${PROJECT_NAME} PUBLIC ${DEPENDENCIES})
 pluginlib_export_plugin_description_file(controller_interface ros2_impedance_controller.xml)
 
 install(

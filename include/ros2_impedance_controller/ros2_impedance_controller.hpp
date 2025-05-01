@@ -22,8 +22,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include <dart/dart.hpp>
-#include <dart/utils/urdf/DartLoader.hpp>
+#include "pinocchio/algorithm/frames.hpp"
+#include "pinocchio/algorithm/geometry.hpp"
+#include "pinocchio/algorithm/jacobian.hpp"
+#include "pinocchio/algorithm/joint-configuration.hpp"
+#include "pinocchio/algorithm/rnea.hpp"
+#include "pinocchio/collision/broadphase.hpp"
+#include "pinocchio/parsers/urdf.hpp"
+
 #include "controller_interface/controller_interface.hpp"
 #include "geometry_msgs/msg/pose.hpp"
 #include "hardware_interface/loaned_command_interface.hpp"
@@ -42,6 +48,7 @@ namespace ros2_impedance_controller
 using ReferenceType = geometry_msgs::msg::Pose;
 
 using DiagonalMatrix6d = Eigen::DiagonalMatrix<double, 6>;
+using Vector6d = Eigen::Matrix<double, 6, 1>;
 
 const uint kMaxJointSpaceSize = 16;
 /**
@@ -141,13 +148,7 @@ private:
 
   Eigen::VectorXd desired_effort_;
 
-  /* DART members */
-  dart::dynamics::SkeletonPtr robot_skeleton_;
-  dart::dynamics::BodyNodePtr robot_base_;
-  dart::dynamics::BodyNodePtr robot_end_effector_;
-
-  /// The equilibrium (target) pose for the impedance model
-  dart::dynamics::SimpleFramePtr desired_frame_;
+  pinocchio::Model robot_model_;
 
   /* Controller Reference Subscriber */
   realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>> rt_reference_ptr_;

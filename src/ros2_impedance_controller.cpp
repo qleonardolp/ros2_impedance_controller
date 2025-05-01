@@ -147,38 +147,7 @@ controller_interface::return_type ImpedanceController::update(
     return controller_interface::return_type::ERROR;
   }
 
-  // Compute the Jacobian
-  dart::math::Jacobian jacobian = robot_end_effector_->getJacobian(robot_base_);
-
-  Eigen::VectorXd gravity_forces = robot_skeleton_->getCoriolisAndGravityForces();
-
-  Eigen::Vector6d deviation;
-  deviation.tail<3>() = desired_frame_->getTransform(robot_base_).translation() -
-                        robot_end_effector_->getTransform(robot_base_).translation();
-
-  Eigen::AngleAxisd angle_axis(desired_frame_->getTransform(robot_end_effector_).linear());
-  deviation.head<3>() = angle_axis.angle() * angle_axis.axis();
-
-  // Compute the time derivative of the error
-  Eigen::Vector6d deviation_derivative =
-    -robot_end_effector_->getSpatialVelocity(desired_frame_.get(), robot_base_);
-
-  if (debug_gravity_)
-  {
-    RCLCPP_WARN_STREAM(get_node()->get_logger(), "Gravity Forces " << gravity_forces);
-
-    RCLCPP_WARN_STREAM(
-      get_node()->get_logger(), "EE translation " << robot_end_effector_->getTransform(robot_base_)
-                                                       .translation());  // completely wrong
-    RCLCPP_WARN_STREAM(
-      get_node()->get_logger(),
-      "Desired translation " << desired_frame_->getTransform(robot_base_).translation());  // ok
-    debug_gravity_ = false;
-  }
-
-  desired_effort_ =
-    gravity_forces + jacobian.transpose() * (taskspace_stiffness_ * deviation +
-                                             taskspace_damping_ * deviation_derivative);
+  // desired_effort_ = Eigen::VectorXf::Zero(6);
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
@@ -193,9 +162,7 @@ controller_interface::return_type ImpedanceController::update(
 
 bool ImpedanceController::configure_robot_model()
 {
-  dart::utils::DartLoader loader;
   std::string share_dir = ament_index_cpp::get_package_share_directory("ros2_impedance_controller");
-  loader.addPackageDirectory("ros2_impedance_controller", share_dir);
 
   parameters_client_->wait_for_service();
   auto parameters_future = parameters_client_->get_parameters(
@@ -208,38 +175,13 @@ bool ImpedanceController::configure_robot_model()
   {
   }
 
-  robot_skeleton_ = loader.parseSkeletonString(robot_urdf_, "");
-  robot_base_ = robot_skeleton_->getBodyNode(params_.base_link);
-  robot_end_effector_ = robot_skeleton_->getBodyNode(params_.interaction_link);
+  pinocchio::urdf::buildModelFromXML(robot_urdf_, robot_model_);
 
-  if (!robot_base_ || !robot_end_effector_)
-  {
-    RCLCPP_ERROR(get_node()->get_logger(), "Could not find specified links in skeleton");
-    return false;
-  }
-  // Rotate root joint to align with z direction
-  robot_skeleton_->getRootJoint()->setTransformFromParentBodyNode(Eigen::Isometry3d::Identity());
-  robot_skeleton_->setGravity(Eigen::Vector3d(0.0, 0.0, -9.81));
+  RCLCPP_INFO(
+    get_node()->get_logger(), "Robot model %s loaded with %d DOFs", robot_model_.name.c_str(),
+    robot_model_.nq);
 
-  desired_frame_ = std::make_shared<dart::dynamics::SimpleFrame>(robot_base_->getParentFrame());
-
-  Eigen::Isometry3d desired_pose = Eigen::Isometry3d::Identity();
-  desired_pose.translate(Eigen::Vector3d(0.2500, -0.10915, 0.62103));
-  desired_frame_->setTransform(
-    desired_pose, robot_base_);  // TODO(qleonardolp): set the new transform
-
-  degrees_of_freedom_ = robot_skeleton_->getNumDofs();
   desired_effort_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
-
-  RCLCPP_INFO(get_node()->get_logger(), "Robot model loaded with %zu DOFs", degrees_of_freedom_);
-
-  for (uint8_t i = 0; i < degrees_of_freedom_; i++)
-  {
-    RCLCPP_INFO(
-      get_node()->get_logger(), "Robot skeleton Dof %zu is joint '%s'",
-      robot_skeleton_->getDof(i)->getIndexInSkeleton(),
-      robot_skeleton_->getDof(i)->getName().c_str());
-  }
   return true;
 }
 
@@ -255,27 +197,18 @@ bool ImpedanceController::update_robot()
       return false;
     }
 
-    robot_skeleton_->setPosition(k, position.value());
-    robot_skeleton_->setVelocity(k, velocity.value());
-
     joint_positions_(k) = position.value();
     joint_velocities_(k) = velocity.value();
 
-    if (false)
+    if (has_effort_states_)
     {
       std::optional effort = ordered_state_interfaces_[k + 2].get().get_optional();
       if (!effort.has_value())
       {
         return false;
       }
-      robot_skeleton_->setForce(k, effort.value());
     }
   }
-  robot_skeleton_->computeForwardKinematics();
-  robot_skeleton_->clearInternalForces();
-  robot_skeleton_->clearExternalForces();
-  robot_skeleton_->setAccelerations(Eigen::VectorXd::Zero(degrees_of_freedom_));
-  robot_skeleton_->computeInverseDynamics();
   return true;
 }
 
@@ -300,6 +233,8 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     return controller_interface::CallbackReturn::ERROR;
   }
 
+  degrees_of_freedom_ = params_.degrees_of_freedom;
+
   state_interface_types_.clear();
   command_interface_types_.clear();
   for (const auto & joint : params_.joints)
@@ -316,8 +251,8 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     return controller_interface::CallbackReturn::ERROR;
   }
 
-  taskspace_stiffness_.diagonal() = Eigen::Vector6d(params_.stiffness.data());
-  taskspace_damping_.diagonal() = Eigen::Vector6d(params_.damping.data());
+  taskspace_stiffness_.diagonal() = Vector6d(params_.stiffness.data());
+  taskspace_damping_.diagonal() = Vector6d(params_.damping.data());
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
