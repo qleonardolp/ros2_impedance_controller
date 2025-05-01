@@ -50,14 +50,6 @@ using ReferenceType = geometry_msgs::msg::Pose;
 using DiagonalMatrix6d = Eigen::DiagonalMatrix<double, 6>;
 using Vector6d = Eigen::Matrix<double, 6, 1>;
 
-const uint kMaxJointSpaceSize = 16;
-/**
- * Avoid dynamic allocation in the update loop by using
- * a large constant sizeEigen::Vector. If the manipulator
- * has more the 16 DOFs them it should be increased.
- */
-using JointSpaceVector = Eigen::Matrix<double, kMaxJointSpaceSize, 1>;
-
 enum InterfaceType : uint8_t
 {
   POSITION,
@@ -119,15 +111,10 @@ private:
   std::shared_ptr<rclcpp::AsyncParametersClient> parameters_client_;
   std::string robot_urdf_;
 
-  std::vector<std::string> joint_names_;
-  std::vector<std::string> command_interface_types_;
-  std::vector<std::string> state_interface_types_;
-
-  std::vector<std::reference_wrapper<hardware_interface::LoanedCommandInterface>>
-    ordered_cmd_interfaces_;
-
-  std::vector<std::reference_wrapper<hardware_interface::LoanedStateInterface>>
-    ordered_state_interfaces_;
+  std::vector<const hardware_interface::LoanedStateInterface *> position_interfaces_;
+  std::vector<const hardware_interface::LoanedStateInterface *> velocity_interfaces_;
+  std::vector<const hardware_interface::LoanedStateInterface *> effort_interfaces_;
+  std::vector<hardware_interface::LoanedCommandInterface *> effort_command_interfaces_;
 
   bool has_effort_states_{true};
   bool debug_gravity_{true};
@@ -139,18 +126,23 @@ private:
   std::string interaction_link_;
   size_t degrees_of_freedom_{1};
 
-  /* Task space stiffness and damping */
+  // Task space stiffness
   DiagonalMatrix6d taskspace_stiffness_;
+  // Task space damping
   DiagonalMatrix6d taskspace_damping_;
 
-  JointSpaceVector joint_positions_;
-  JointSpaceVector joint_velocities_;
+  // Robot state vectors
+  Eigen::VectorXd robot_positions_;
+  Eigen::VectorXd robot_velocities_;
+  Eigen::VectorXd robot_efforts_;
 
-  Eigen::VectorXd desired_effort_;
+  // Controller effort command vector
+  Eigen::VectorXd effort_commands_;
 
   pinocchio::Model robot_model_;
+  std::shared_ptr<pinocchio::Data> robot_data_ptr_;
 
-  /* Controller Reference Subscriber */
+  // Controller Reference Subscriber
   realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>> rt_reference_ptr_;
   rclcpp::Subscription<ReferenceType>::SharedPtr reference_subscriber_;
 };

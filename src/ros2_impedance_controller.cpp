@@ -33,15 +33,27 @@ ImpedanceController::ImpedanceController()
 controller_interface::InterfaceConfiguration ImpedanceController::command_interface_configuration()
   const
 {
-  return controller_interface::InterfaceConfiguration{
-    controller_interface::interface_configuration_type::INDIVIDUAL, command_interface_types_};
+  controller_interface::InterfaceConfiguration command_config;
+  command_config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
+  for (const auto & joint : params_.joints)
+  {
+    command_config.names.push_back(joint + "/" + hardware_interface::HW_IF_EFFORT);
+  }
+  return command_config;
 }
 
 controller_interface::InterfaceConfiguration ImpedanceController::state_interface_configuration()
   const
 {
-  return controller_interface::InterfaceConfiguration{
-    controller_interface::interface_configuration_type::ALL};
+  controller_interface::InterfaceConfiguration state_config;
+  state_config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
+  for (const auto & joint : params_.joints)
+  {
+    state_config.names.push_back(joint + "/" + hardware_interface::HW_IF_POSITION);
+    state_config.names.push_back(joint + "/" + hardware_interface::HW_IF_VELOCITY);
+    state_config.names.push_back(joint + "/" + hardware_interface::HW_IF_EFFORT);
+  }
+  return state_config;
 }
 
 controller_interface::CallbackReturn ImpedanceController::on_init()
@@ -76,12 +88,14 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     return controller_interface::CallbackReturn::ERROR;
   }
 
-  joint_positions_ = JointSpaceVector::Zero();
-  joint_velocities_ = JointSpaceVector::Zero();
-
   reference_subscriber_ = get_node()->create_subscription<ReferenceType>(
     "~/reference", rclcpp::SystemDefaultsQoS(),
     [this](const ReferenceType::SharedPtr msg) { rt_reference_ptr_.writeFromNonRT(msg); });
+
+  robot_positions_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
+  robot_velocities_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
+  robot_efforts_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
+  effort_commands_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -89,50 +103,64 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
 controller_interface::CallbackReturn ImpedanceController::on_activate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  bool interfaces_provided = controller_interface::get_ordered_interfaces(
-    command_interfaces_,  // LoanedCommandInterface from the base class
-    command_interface_types_, std::string(""), ordered_cmd_interfaces_);
+  auto logger = get_node()->get_logger();
+  RCLCPP_INFO(logger, "Activating %s...", get_node()->get_name());
 
-  if (!interfaces_provided)
+  effort_command_interfaces_.clear();
+  position_interfaces_.clear();
+  velocity_interfaces_.clear();
+  effort_interfaces_.clear();
+
+  effort_command_interfaces_.resize(degrees_of_freedom_, nullptr);
+  position_interfaces_.resize(degrees_of_freedom_, nullptr);
+  velocity_interfaces_.resize(degrees_of_freedom_, nullptr);
+  effort_interfaces_.resize(degrees_of_freedom_, nullptr);
+
+  for (const auto & interface : state_interfaces_)  // LoanedStateInterface from the base class
   {
-    RCLCPP_ERROR(
-      get_node()->get_logger(), "Expected %zu command interfaces, got %zu",
-      command_interface_types_.size(), ordered_cmd_interfaces_.size());
-    return controller_interface::CallbackReturn::ERROR;
+    const std::string & joint_name = interface.get_prefix_name();
+    const std::string & interface_type = interface.get_interface_name();
+
+    auto it = std::find(params_.joints.begin(), params_.joints.end(), joint_name);
+    if (it == params_.joints.end()) continue;
+    const size_t index = std::distance(params_.joints.begin(), it);
+
+    if (interface_type == hardware_interface::HW_IF_POSITION)
+      position_interfaces_[index] = &interface;
+    else if (interface_type == hardware_interface::HW_IF_VELOCITY)
+      velocity_interfaces_[index] = &interface;
+    else if (interface_type == hardware_interface::HW_IF_EFFORT)
+      effort_interfaces_[index] = &interface;
   }
 
-  size_t minimal_states_size = params_.joints.size() * 2;  // positions and velocities
-
-  interfaces_provided = controller_interface::get_ordered_interfaces(
-    state_interfaces_,  // LoanedStateInterface from the base class
-    state_interface_types_, std::string(""), ordered_state_interfaces_);
-
-  size_t ordered_states_size = ordered_state_interfaces_.size();
-
-  has_effort_states_ = !(ordered_states_size == minimal_states_size);
-
-  if (
-    ordered_states_size != state_interface_types_.size() &&
-    ordered_states_size != minimal_states_size)
+  for (auto & interface : command_interfaces_)  // LoanedCommandInterface from the base class
   {
-    RCLCPP_ERROR(
-      get_node()->get_logger(), "Expected %zu state interfaces or %zu without effort, got %zu",
-      state_interface_types_.size(), minimal_states_size, ordered_state_interfaces_.size());
-    return controller_interface::CallbackReturn::ERROR;
+    if (interface.get_interface_name() != hardware_interface::HW_IF_EFFORT) continue;
+    const std::string & joint_name = interface.get_prefix_name();
+    auto it = std::find(params_.joints.begin(), params_.joints.end(), joint_name);
+    if (it == params_.joints.end()) continue;
+    const size_t index = std::distance(params_.joints.begin(), it);
+    effort_command_interfaces_[index] = &interface;
   }
 
+  for (size_t i = 0; i < degrees_of_freedom_; i++)
+  {
+    if (!effort_command_interfaces_[i])
+    {
+      RCLCPP_ERROR(logger, "Command interface for joint %zu is null!", i);
+      return CallbackReturn::ERROR;
+    }
+  }
   // Reset reference buffer
   rt_reference_ptr_ = realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>>(nullptr);
 
-  RCLCPP_WARN(get_node()->get_logger(), "activate successful");
+  RCLCPP_INFO(logger, "... activated successfully");
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
 controller_interface::CallbackReturn ImpedanceController::on_deactivate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  ordered_cmd_interfaces_.clear();
-  ordered_state_interfaces_.clear();
   rt_reference_ptr_ = realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>>(nullptr);
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -147,11 +175,12 @@ controller_interface::return_type ImpedanceController::update(
     return controller_interface::return_type::ERROR;
   }
 
-  // desired_effort_ = Eigen::VectorXf::Zero(6);
+  effort_commands_ =
+    pinocchio::computeGeneralizedGravity(robot_model_, *robot_data_ptr_.get(), robot_positions_);
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
-    if (!ordered_cmd_interfaces_[k].get().set_value(desired_effort_(k)))
+    if (!effort_command_interfaces_[k]->set_value(effort_commands_(k)))
     {
       RCLCPP_ERROR(get_node()->get_logger(), "Failed to set command interface value");
       return controller_interface::return_type::ERROR;
@@ -176,12 +205,11 @@ bool ImpedanceController::configure_robot_model()
   }
 
   pinocchio::urdf::buildModelFromXML(robot_urdf_, robot_model_);
+  robot_data_ptr_ = std::make_shared<pinocchio::Data>(robot_model_);
 
   RCLCPP_INFO(
     get_node()->get_logger(), "Robot model %s loaded with %d DOFs", robot_model_.name.c_str(),
     robot_model_.nq);
-
-  desired_effort_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
   return true;
 }
 
@@ -189,26 +217,26 @@ bool ImpedanceController::update_robot()
 {
   for (uint8_t k = 0; k < degrees_of_freedom_; k++)
   {
-    std::optional position = ordered_state_interfaces_[k].get().get_optional();
-    std::optional velocity = ordered_state_interfaces_[k + 1].get().get_optional();
+    std::optional position = position_interfaces_[k]->get_optional();
+    std::optional velocity = velocity_interfaces_[k]->get_optional();
+    std::optional effort = effort_interfaces_[k]->get_optional();
 
-    if (!position.has_value() || !velocity.has_value())
+    if (!position.has_value() || !velocity.has_value() || !effort.has_value())
     {
       return false;
     }
 
-    joint_positions_(k) = position.value();
-    joint_velocities_(k) = velocity.value();
-
-    if (has_effort_states_)
-    {
-      std::optional effort = ordered_state_interfaces_[k + 2].get().get_optional();
-      if (!effort.has_value())
-      {
-        return false;
-      }
-    }
+    robot_positions_(k) = position.value();
+    robot_velocities_(k) = velocity.value();
+    robot_efforts_(k) = effort.value();
   }
+  if (debug_gravity_)
+  {
+    RCLCPP_INFO_STREAM(get_node()->get_logger(), "q0: " << robot_positions_);
+    debug_gravity_ = false;
+  }
+  pinocchio::forwardKinematics(robot_model_, *robot_data_ptr_.get(), robot_positions_);
+  pinocchio::updateFramePlacements(robot_model_, *robot_data_ptr_.get());
   return true;
 }
 
@@ -234,16 +262,6 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
   }
 
   degrees_of_freedom_ = params_.degrees_of_freedom;
-
-  state_interface_types_.clear();
-  command_interface_types_.clear();
-  for (const auto & joint : params_.joints)
-  {
-    command_interface_types_.push_back(joint + "/" + hardware_interface::HW_IF_EFFORT);
-    state_interface_types_.push_back(joint + "/" + hardware_interface::HW_IF_POSITION);
-    state_interface_types_.push_back(joint + "/" + hardware_interface::HW_IF_VELOCITY);
-    state_interface_types_.push_back(joint + "/" + hardware_interface::HW_IF_EFFORT);
-  }
 
   if (params_.stiffness.empty() || params_.damping.empty())
   {
