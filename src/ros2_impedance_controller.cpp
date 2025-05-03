@@ -16,11 +16,6 @@
 
 #include <chrono>
 
-#include "ament_index_cpp/get_package_share_directory.hpp"
-#include "controller_interface/helpers.hpp"
-#include "rclcpp/logging.hpp"
-#include "rclcpp/qos.hpp"
-
 namespace ros2_impedance_controller
 {
 ImpedanceController::ImpedanceController()

@@ -37,6 +37,10 @@ generate_parameter_library(
 add_library(${PROJECT_NAME} SHARED src/ros2_impedance_controller.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+target_precompile_headers(
+  ${PROJECT_NAME} PRIVATE
+  include/ros2_impedance_controller/ros2_impedance_controller_pch.hpp
+)
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
