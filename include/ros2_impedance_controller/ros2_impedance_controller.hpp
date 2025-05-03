@@ -103,13 +103,18 @@ private:
   DiagonalMatrix6d taskspace_stiffness_;
   // Task space damping
   DiagonalMatrix6d taskspace_damping_;
+  // Desired impedance wrench [forces, torques].T
+  Vector6d impedance_wrench_;
 
-  // Robot state vectors
+  // Robot state vectors (in joint space)
   VectorXd robot_positions_;
   VectorXd robot_velocities_;
   VectorXd robot_efforts_;
 
-  // Controller effort command vector
+  // Robot end_effector state (in task space)
+  Vector6d end_effector_pose_;
+
+  // Controller effort command vector (in joint space)
   VectorXd effort_commands_;
 
   pinocchio::Model robot_model_;

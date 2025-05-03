@@ -16,6 +16,8 @@
 
 #include <chrono>
 
+#include "pinocchio/math/rpy.hpp"
+
 namespace ros2_impedance_controller
 {
 ImpedanceController::ImpedanceController()
@@ -103,6 +105,10 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   auto logger = get_node()->get_logger();
   RCLCPP_INFO(logger, "Activating %s...", get_node()->get_name());
 
+  jacobian_.setZero();
+  impedance_wrench_.setZero();
+  effort_commands_.setZero();
+
   effort_command_interfaces_.clear();
   position_interfaces_.clear();
   velocity_interfaces_.clear();
@@ -172,16 +178,25 @@ controller_interface::return_type ImpedanceController::update(
     return controller_interface::return_type::ERROR;
   }
 
-  Eigen::VectorXd impedance_wrench(6);
-  impedance_wrench.setZero();
-  impedance_wrench(0) = 1;  // 1 newton in x direction
+  Vector6d desired_pose;
+  desired_pose.setZero();
+  desired_pose(0) = 0.512;
+  desired_pose(2) = 0.450;
+
+  Vector6d desired_twist;
+  desired_twist.setZero();
 
   pinocchio::computeFrameJacobian(
     robot_model_, *robot_data_.get(), robot_positions_, end_effector_frame_,
     pinocchio::LOCAL_WORLD_ALIGNED, jacobian_);
 
+  Vector6d end_effector_twist = jacobian_ * robot_velocities_;
+
+  impedance_wrench_ = taskspace_stiffness_ * (desired_pose - end_effector_pose_) +
+                      taskspace_damping_ * (desired_twist - end_effector_twist);
+
   effort_commands_ =
-    jacobian_.transpose() * impedance_wrench +
+    jacobian_.transpose() * impedance_wrench_ +
     pinocchio::computeGeneralizedGravity(robot_model_, *robot_data_.get(), robot_positions_);
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
@@ -237,7 +252,11 @@ bool ImpedanceController::update_robot()
     robot_efforts_(k) = effort.value();
   }
   pinocchio::forwardKinematics(robot_model_, *robot_data_.get(), robot_positions_);
-  pinocchio::updateFramePlacements(robot_model_, *robot_data_.get());
+  pinocchio::updateFramePlacement(robot_model_, *robot_data_.get(), end_effector_frame_);
+
+  end_effector_pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
+  Eigen::Matrix3d ee_rotation = robot_data_.get()->oMf[end_effector_frame_].rotation();
+  end_effector_pose_.tail<3>() = pinocchio::rpy::matrixToRpy(ee_rotation);
   return true;
 }
 
