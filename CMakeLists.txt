@@ -12,6 +12,10 @@ if(${CMAKE_BUILD_TYPE} STREQUAL "Release")
   message(STATUS "Building Release, with flags ${CMAKE_CXX_FLAGS_RELEASE}")
 endif()
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo)
+endif()
+
 set(DEPENDENCIES
   ament_index_cpp
   Eigen3
