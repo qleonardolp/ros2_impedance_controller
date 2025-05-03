@@ -4,6 +4,10 @@ project(ros2_impedance_controller LANGUAGES CXX)
 find_package(ros2_control_cmake REQUIRED)
 set_compiler_options()
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo)
+endif()
+
 set(DEPENDENCIES
   ament_index_cpp
   controller_interface
