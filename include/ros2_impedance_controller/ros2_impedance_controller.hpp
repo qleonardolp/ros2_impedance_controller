@@ -19,15 +19,11 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "pinocchio/algorithm/frames.hpp"
-#include "pinocchio/algorithm/geometry.hpp"
 #include "pinocchio/algorithm/jacobian.hpp"
-#include "pinocchio/algorithm/joint-configuration.hpp"
 #include "pinocchio/algorithm/rnea.hpp"
-#include "pinocchio/collision/broadphase.hpp"
 #include "pinocchio/parsers/urdf.hpp"
 
 #include "controller_interface/controller_interface.hpp"
@@ -50,18 +46,10 @@ using ReferenceType = geometry_msgs::msg::Pose;
 using DiagonalMatrix6d = Eigen::DiagonalMatrix<double, 6>;
 using Vector6d = Eigen::Matrix<double, 6, 1>;
 
-enum InterfaceType : uint8_t
-{
-  POSITION,
-  VELOCITY,
-  EFFORT
-};
+const uint8_t kMaxJointSpaceSize = 12;  // avoiding dynamic memory allocation
 
-std::unordered_map<std::string, InterfaceType> InterfaceMap = {
-  {hardware_interface::HW_IF_POSITION, InterfaceType::POSITION},
-  {hardware_interface::HW_IF_VELOCITY, InterfaceType::VELOCITY},
-  {hardware_interface::HW_IF_EFFORT, InterfaceType::EFFORT},
-};
+typedef Eigen::Matrix<double, 6, Eigen::Dynamic, 0, 6, kMaxJointSpaceSize> Matrix6Xd;
+typedef Eigen::Matrix<double, Eigen::Dynamic, 1, 0, kMaxJointSpaceSize, 1> VectorXd;
 
 /**
  * \brief Cartesian Impedance Controller for Manipulators.
@@ -132,15 +120,18 @@ private:
   DiagonalMatrix6d taskspace_damping_;
 
   // Robot state vectors
-  Eigen::VectorXd robot_positions_;
-  Eigen::VectorXd robot_velocities_;
-  Eigen::VectorXd robot_efforts_;
+  VectorXd robot_positions_;
+  VectorXd robot_velocities_;
+  VectorXd robot_efforts_;
 
   // Controller effort command vector
-  Eigen::VectorXd effort_commands_;
+  VectorXd effort_commands_;
 
   pinocchio::Model robot_model_;
-  std::shared_ptr<pinocchio::Data> robot_data_ptr_;
+  pinocchio::FrameIndex end_effector_frame_;
+  std::shared_ptr<pinocchio::Data> robot_data_;
+
+  Matrix6Xd jacobian_;
 
   // Controller Reference Subscriber
   realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>> rt_reference_ptr_;

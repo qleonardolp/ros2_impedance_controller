@@ -92,10 +92,12 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     "~/reference", rclcpp::SystemDefaultsQoS(),
     [this](const ReferenceType::SharedPtr msg) { rt_reference_ptr_.writeFromNonRT(msg); });
 
-  robot_positions_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
-  robot_velocities_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
-  robot_efforts_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
-  effort_commands_ = Eigen::VectorXd::Zero(degrees_of_freedom_);
+  // Initialize dynamic Eigen members, setting the size and filling with 0s
+  robot_positions_ = VectorXd::Zero(degrees_of_freedom_);
+  robot_velocities_ = VectorXd::Zero(degrees_of_freedom_);
+  robot_efforts_ = VectorXd::Zero(degrees_of_freedom_);
+  effort_commands_ = VectorXd::Zero(degrees_of_freedom_);
+  jacobian_ = Matrix6Xd::Zero(6, degrees_of_freedom_);
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -175,8 +177,17 @@ controller_interface::return_type ImpedanceController::update(
     return controller_interface::return_type::ERROR;
   }
 
+  Eigen::VectorXd impedance_wrench(6);
+  impedance_wrench.setZero();
+  impedance_wrench(0) = 1;  // 1 newton in x direction
+
+  pinocchio::computeFrameJacobian(
+    robot_model_, *robot_data_.get(), robot_positions_, end_effector_frame_,
+    pinocchio::LOCAL_WORLD_ALIGNED, jacobian_);
+
   effort_commands_ =
-    pinocchio::computeGeneralizedGravity(robot_model_, *robot_data_ptr_.get(), robot_positions_);
+    jacobian_.transpose() * impedance_wrench +
+    pinocchio::computeGeneralizedGravity(robot_model_, *robot_data_.get(), robot_positions_);
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
@@ -191,8 +202,6 @@ controller_interface::return_type ImpedanceController::update(
 
 bool ImpedanceController::configure_robot_model()
 {
-  std::string share_dir = ament_index_cpp::get_package_share_directory("ros2_impedance_controller");
-
   parameters_client_->wait_for_service();
   auto parameters_future = parameters_client_->get_parameters(
     {"robot_description"},
@@ -205,7 +214,9 @@ bool ImpedanceController::configure_robot_model()
   }
 
   pinocchio::urdf::buildModelFromXML(robot_urdf_, robot_model_);
-  robot_data_ptr_ = std::make_shared<pinocchio::Data>(robot_model_);
+  robot_data_ = std::make_shared<pinocchio::Data>(robot_model_);
+  // TODO(@me): check if the frame exists
+  end_effector_frame_ = robot_model_.getFrameId(params_.interaction_link);
 
   RCLCPP_INFO(
     get_node()->get_logger(), "Robot model %s loaded with %d DOFs", robot_model_.name.c_str(),
@@ -230,13 +241,8 @@ bool ImpedanceController::update_robot()
     robot_velocities_(k) = velocity.value();
     robot_efforts_(k) = effort.value();
   }
-  if (debug_gravity_)
-  {
-    RCLCPP_INFO_STREAM(get_node()->get_logger(), "q0: " << robot_positions_);
-    debug_gravity_ = false;
-  }
-  pinocchio::forwardKinematics(robot_model_, *robot_data_ptr_.get(), robot_positions_);
-  pinocchio::updateFramePlacements(robot_model_, *robot_data_ptr_.get());
+  pinocchio::forwardKinematics(robot_model_, *robot_data_.get(), robot_positions_);
+  pinocchio::updateFramePlacements(robot_model_, *robot_data_.get());
   return true;
 }
 
