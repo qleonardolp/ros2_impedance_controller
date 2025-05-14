@@ -2,8 +2,9 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="ur5_robot">
   <xacro:arg name="use_gazebo" default="true" />
 
-  <xacro:include filename="$(find ros2_impedance_controller)/description/urdf/ur5_description.urdf.xacro" />
+  <xacro:include filename="$(find ros2_impedance_controller)/description/urdf/ur5.description.urdf.xacro" />
   <xacro:include filename="$(find ros2_impedance_controller)/description/ros2_control/ur5.ros2_control.xacro" />
+  <xacro:include filename="$(find ros2_impedance_controller)/description/environment/environment.xacro" />
 
   <link name="world"/>
 
@@ -17,4 +18,6 @@
     <xacro:include filename="$(find ros2_impedance_controller)/description/gazebo/ur5.gazebo.xacro" />
     <xacro:ur5_gazebo/>
   </xacro:if>
+
+  <xacro:environment world_link="world"/>
 </robot>

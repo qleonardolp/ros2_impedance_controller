@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:macro name="environment" params="world_link">
+
+  <material name="greenyellow">
+    <color rgba="${153/255} ${255/255} ${51/255} 0.67"/>
+  </material>
+
+  <xacro:property name="mass" value="20.0" />
+  <xacro:property name="width" value="0.30" />
+  <xacro:property name="height" value="1.2" />
+
+  <joint name="wall_joint" type="fixed">
+    <parent link="${world_link}"/>
+    <child link="wall_link" />
+    <origin rpy="0.0 0.0 0.0" xyz="0.80 0.0 0.0"/>
+  </joint>
+
+  <link name="wall_link">
+    <collision>
+      <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${width} ${width} ${height}"/>
+      </geometry>
+    </collision>
+
+    <visual>
+      <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${width} ${width} ${height}"/>
+      </geometry>
+      <material name="greenyellow"/>
+    </visual>
+
+    <inertial>
+      <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${mass / 12.0 * (width*width + height*height)}" ixy="0.0" ixz="0.0"
+        iyy="${mass / 12.0 * (height*height + width*width)}" iyz="0.0"
+        izz="${mass / 12.0 * (width*width + width*width)}"/>
+    </inertial>
+  </link>
+
+  </xacro:macro>
+
+</robot>
