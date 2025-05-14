@@ -67,9 +67,31 @@ public:
     const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
 protected:
+  /**
+   * @brief Configure the internal robot model from the URDF available in the
+   * parameter server ('robot_description'). In this way the URDF parsed by the
+   * rigid-body dynamics library has been already parsed by ROS, resolving
+   * launch-related parameter setting.
+   *
+   * @return true, in case of successful parsing;
+   * @return false, in case of failed parsing or missing frame.
+   */
   bool configure_robot_model();
 
+  /**
+   * @brief Update the robot data while running the controller.
+   * State interfaces are fetch and the Forward Kinematics is computed.
+   */
   bool update_robot();
+
+  /**
+   * @brief Update the end-effector pose deviation (error). The position
+   * part is simply the reference minus the state. The orientation part is
+   * computed using Lie algebra (pinocchio::log3) to avoid gimbal lock.
+   *
+   * @return the pose deviation with position and orientation stacked.
+   */
+  Vector6d update_pose_deviation();
 
   void declare_parameters();
 
@@ -110,9 +132,6 @@ private:
   VectorXd robot_positions_;
   VectorXd robot_velocities_;
   VectorXd robot_efforts_;
-
-  // Robot end_effector state (in task space)
-  Vector6d end_effector_pose_;
 
   // Controller effort command vector (in joint space)
   VectorXd effort_commands_;

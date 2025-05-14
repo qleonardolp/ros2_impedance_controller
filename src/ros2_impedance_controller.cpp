@@ -178,11 +178,6 @@ controller_interface::return_type ImpedanceController::update(
     return controller_interface::return_type::ERROR;
   }
 
-  Vector6d desired_pose;
-  desired_pose.setZero();
-  desired_pose(0) = 0.512;
-  desired_pose(2) = 0.450;
-
   Vector6d desired_twist;
   desired_twist.setZero();
 
@@ -192,7 +187,7 @@ controller_interface::return_type ImpedanceController::update(
 
   Vector6d end_effector_twist = jacobian_ * robot_velocities_;
 
-  impedance_wrench_ = taskspace_stiffness_ * (desired_pose - end_effector_pose_) +
+  impedance_wrench_ = taskspace_stiffness_ * update_pose_deviation() +
                       taskspace_damping_ * (desired_twist - end_effector_twist);
 
   effort_commands_ =
@@ -225,7 +220,13 @@ bool ImpedanceController::configure_robot_model()
 
   pinocchio::urdf::buildModelFromXML(robot_urdf_, robot_model_);
   robot_data_ = std::make_shared<pinocchio::Data>(robot_model_);
-  // TODO(@me): check if the frame exists
+
+  if (!robot_model_.existFrame(params_.interaction_link))
+  {
+    RCLCPP_ERROR(
+      get_node()->get_logger(), "Frame '%s' not found!", params_.interaction_link.c_str());
+    return false;
+  }
   end_effector_frame_ = robot_model_.getFrameId(params_.interaction_link);
 
   RCLCPP_INFO(
@@ -253,11 +254,37 @@ bool ImpedanceController::update_robot()
   }
   pinocchio::forwardKinematics(robot_model_, *robot_data_.get(), robot_positions_);
   pinocchio::updateFramePlacement(robot_model_, *robot_data_.get(), end_effector_frame_);
-
-  end_effector_pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
-  Eigen::Matrix3d ee_rotation = robot_data_.get()->oMf[end_effector_frame_].rotation();
-  end_effector_pose_.tail<3>() = pinocchio::rpy::matrixToRpy(ee_rotation);
   return true;
+}
+
+Vector6d ImpedanceController::update_pose_deviation()
+{
+  if (*rt_reference_ptr_.readFromNonRT() != nullptr)
+  {
+    geometry_msgs::msg::Pose desired_pose = *rt_reference_ptr_.readFromNonRT()->get();
+
+    Eigen::Vector3d desired_position(
+      desired_pose.position.x, desired_pose.position.y, desired_pose.position.z);
+
+    Eigen::Quaterniond desired_quaternion(
+      desired_pose.orientation.w, desired_pose.orientation.x, desired_pose.orientation.y,
+      desired_pose.orientation.z);
+    desired_quaternion.normalize();
+
+    Eigen::Vector3d actual_position = robot_data_.get()->oMf[end_effector_frame_].translation();
+    Eigen::Matrix3d actual_orientation = robot_data_.get()->oMf[end_effector_frame_].rotation();
+
+    Vector6d pose_deviation;
+
+    pose_deviation.head<3>() = desired_position - actual_position;
+    pose_deviation.tail<3>() =
+      pinocchio::log3(desired_quaternion.toRotationMatrix() * actual_orientation.transpose());
+    return pose_deviation;
+  }
+  else
+  {
+    return Vector6d::Zero();
+  }
 }
 
 void ImpedanceController::robot_description_param_cb(
