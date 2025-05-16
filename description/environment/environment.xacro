@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <xacro:macro name="environment" params="world_link">
+  <xacro:macro name="environment" params="parent_link">
 
   <material name="greenyellow">
     <color rgba="${153/255} ${255/255} ${51/255} 0.67"/>
@@ -13,7 +13,7 @@
   <xacro:property name="height" value="1.00" />
 
   <joint name="wall_joint" type="fixed">
-    <parent link="${world_link}"/>
+    <parent link="${parent_link}"/>
     <child link="wall_link" />
     <origin rpy="0.0 0.0 0.0" xyz="${0.55 + width/2} ${0.05 + length/2} 0.0"/>
   </joint>
@@ -24,6 +24,13 @@
       <geometry>
         <box size="${width} ${length} ${height}"/>
       </geometry>
+      <surface>
+        <friction>
+          <ode/>
+        </friction>
+        <bounce/>
+        <contact/>
+      </surface>
     </collision>
 
     <visual>
