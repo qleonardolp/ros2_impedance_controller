@@ -13,8 +13,8 @@
     <magnetic_field>1.83535e-05 -7.7993e-06 -1.46974e-05</magnetic_field>
     <atmosphere type='adiabatic'/>
     <scene>
-      <ambient>0.400000006 0.400000006 0.400000006 1</ambient>
-      <background>0.699999988 0.699999988 0.699999988 1</background>
+      <ambient>0.40 0.40 0.40 1</ambient>
+      <background>0.70 0.69 0.69 1</background>
       <shadows>true</shadows>
     </scene>
     <model name='ground_plane'>
@@ -66,17 +66,64 @@
       <pose>0 0 0 0 0 0</pose>
       <self_collide>false</self_collide>
     </model>
+    <model name='rigid_wall'>
+      <pose>1.1267294898152471 0.12232464565630603 0.49999999028466374 0 0 0</pose>
+      <link name='rigid_wall_link'>
+        <inertial>
+          <inertia>
+            <ixx>16.666</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>16.666</iyy>
+            <iyz>0</iyz>
+            <izz>16.666</izz>
+          </inertia>
+          <mass>100</mass>
+          <pose>0 0 0 0 0 0</pose>
+        </inertial>
+        <collision name='rigid_wall_collision'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='rigid_wall_visual'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.300000012 0.300000012 0.300000012 1</ambient>
+            <diffuse>0.699999988 0.699999988 0.699999988 1</diffuse>
+            <specular>1 1 1 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <enable_wind>false</enable_wind>
+      </link>
+      <static>true</static> <!-- works with false too -->
+      <self_collide>false</self_collide>
+    </model>
     <light name='sun' type='directional'>
       <pose>0 0 10 0 0 0</pose>
-      <cast_shadows>true</cast_shadows>
+      <cast_shadows>false</cast_shadows>
       <intensity>1</intensity>
-      <direction>-0.5 0.10000000000000001 -0.90000000000000002</direction>
-      <diffuse>0.800000012 0.800000012 0.800000012 1</diffuse>
-      <specular>0.200000003 0.200000003 0.200000003 1</specular>
+      <direction>0.5 0.10 -0.90</direction>
+      <diffuse>0.80 0.80 0.80 1</diffuse>
+      <specular>0.200 0.200 0.200 1</specular>
       <attenuation>
         <range>1000</range>
         <linear>0.01</linear>
-        <constant>0.90000000000000002</constant>
+        <constant>0.900</constant>
         <quadratic>0.001</quadratic>
       </attenuation>
       <spot>
