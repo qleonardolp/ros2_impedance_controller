@@ -56,7 +56,7 @@ ament_target_dependencies(${PROJECT_NAME} PUBLIC ${DEPENDENCIES})
 pluginlib_export_plugin_description_file(controller_interface ros2_impedance_controller.xml)
 
 install(
-  DIRECTORY config description launch
+  DIRECTORY config description launch world
   DESTINATION share/${PROJECT_NAME}
 )
 

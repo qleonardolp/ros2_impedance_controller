@@ -62,25 +62,36 @@ def generate_launch_description():
         )
     )
 
-    # Initialize Arguments
+    # Arguments variables
     debug = LaunchConfiguration("debug")
     robot_model = LaunchConfiguration("robot")
     gz_gui = LaunchConfiguration("gz_gui")
     controller_name = LaunchConfiguration("controller_name")
+
+    package_share = FindPackageShare("ros2_impedance_controller")
+    gazebo_world = PathJoinSubstitution([package_share, "world", "world.sdf"])
+    controllers = PathJoinSubstitution([package_share, "config", "controllers.yaml"])
+    rviz_config = PathJoinSubstitution([package_share, "config", "rviz2.rviz"])
 
     # gazebo
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
         ),
-        launch_arguments=[("gz_args", " -r -v 3 empty.sdf")],
+        launch_arguments={
+            "gz_args": ["-r -v0 ", gazebo_world],
+            "on_exit_shutdown": "true",
+        }.items(),
         condition=IfCondition(gz_gui),
     )
     gazebo_headless = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
         ),
-        launch_arguments=[("gz_args", ["--headless-rendering -s -r -v 3 empty.sdf"])],
+        launch_arguments={
+            "gz_args": ["-s -r -v0 ", gazebo_world],
+            "on_exit_shutdown": "true",
+        }.items(),
         condition=UnlessCondition(gz_gui),
     )
 
@@ -91,8 +102,8 @@ def generate_launch_description():
         arguments=["/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock"],
         output="log",
     )
-
-    gz_spawn_entity = Node(
+    # Robot spawner in Gazebo
+    gz_entity_spawner = Node(
         package="ros_gz_sim",
         executable="create",
         output="log",
@@ -105,32 +116,17 @@ def generate_launch_description():
             "true",
         ],
     )
-
     # Get URDF via xacro
     robot_urdf = Command(
         [
             PathJoinSubstitution([FindExecutable(name="xacro")]),
             " ",
-            PathJoinSubstitution(
-                [FindPackageShare("ros2_impedance_controller"), "description", "urdf", robot_model]
-            ),
+            PathJoinSubstitution([package_share, "description", "urdf", robot_model]),
             " ",
             "use_gazebo:=true",
         ]
     )
     robot_description = {"robot_description": robot_urdf}
-
-    controllers = PathJoinSubstitution(
-        [
-            FindPackageShare("ros2_impedance_controller"),
-            "config",
-            "controllers.yaml",
-        ]
-    )
-
-    rviz_config = PathJoinSubstitution(
-        [FindPackageShare("ros2_impedance_controller"), "config", "rviz2.rviz"]
-    )
 
     robot_state_publisher = Node(
         package="robot_state_publisher",
@@ -180,7 +176,7 @@ def generate_launch_description():
         gazebo_headless,
         gazebo_bridge,
         robot_state_publisher,
-        gz_spawn_entity,
+        gz_entity_spawner,
         controller_manager,
         joint_state_broadcaster_spawner,
         impedance_controller_spawner,

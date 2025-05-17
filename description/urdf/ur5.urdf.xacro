@@ -4,17 +4,8 @@
 
   <xacro:include filename="$(find ros2_impedance_controller)/description/urdf/ur5.description.urdf.xacro" />
   <xacro:include filename="$(find ros2_impedance_controller)/description/ros2_control/ur5.ros2_control.xacro" />
-  <xacro:include filename="$(find ros2_impedance_controller)/description/environment/environment.xacro" />
 
   <link name="world"/>
-
-  <!-- Collision is not working with this URDF.
-       However, the collision settings are properly
-       defined on Gazebo, and it with for the ground
-       and added objects in Gazebo. Consider create
-       a world model then.
-  -->
-  <xacro:environment parent_link="world"/>
 
   <xacro:ur5_robot parent="world">
     <origin xyz="0 0 0" rpy="0 0 0" />
