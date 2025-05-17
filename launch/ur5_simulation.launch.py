@@ -69,7 +69,7 @@ def generate_launch_description():
     controller_name = LaunchConfiguration("controller_name")
 
     package_share = FindPackageShare("ros2_impedance_controller")
-    gazebo_world = PathJoinSubstitution([package_share, "world", "world.sdf"])
+    gazebo_world = PathJoinSubstitution([package_share, "worlds", "benchmark.sdf"])
     controllers = PathJoinSubstitution([package_share, "config", "controllers.yaml"])
     rviz_config = PathJoinSubstitution([package_share, "config", "rviz2.rviz"])
 
