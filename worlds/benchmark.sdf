@@ -67,24 +67,24 @@
       <self_collide>false</self_collide>
     </model>
     <model name='rigid_wall'>
-      <pose>1.1267294898152471 0.12232464565630603 0.49999999028466374 0 0 0</pose>
+      <pose>0.60 -0.50 0.60 0 0 0</pose>
       <link name='rigid_wall_link'>
         <inertial>
           <inertia>
-            <ixx>16.666</ixx>
+            <ixx>1</ixx>
             <ixy>0</ixy>
             <ixz>0</ixz>
-            <iyy>16.666</iyy>
+            <iyy>1</iyy>
             <iyz>0</iyz>
-            <izz>16.666</izz>
+            <izz>1</izz>
           </inertia>
-          <mass>100</mass>
+          <mass>1</mass>
           <pose>0 0 0 0 0 0</pose>
         </inertial>
         <collision name='rigid_wall_collision'>
           <geometry>
             <box>
-              <size>1 1 1</size>
+              <size>0.127 1.0 1.2</size>
             </box>
           </geometry>
           <surface>
@@ -98,19 +98,115 @@
         <visual name='rigid_wall_visual'>
           <geometry>
             <box>
-              <size>1 1 1</size>
+              <size>0.127 1.0 1.2</size>
             </box>
           </geometry>
           <material>
-            <ambient>0.300000012 0.300000012 0.300000012 1</ambient>
-            <diffuse>0.699999988 0.699999988 0.699999988 1</diffuse>
+            <ambient>0.60 1.0 0.20 1.0</ambient>
+            <diffuse>0.60 1.0 0.20 0.80</diffuse>
             <specular>1 1 1 1</specular>
           </material>
         </visual>
         <pose>0 0 0 0 0 0</pose>
         <enable_wind>false</enable_wind>
       </link>
-      <static>true</static> <!-- works with false too -->
+      <static>true</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='rigid_table'>
+      <pose>0.0 0.60 0.20 0 0 0</pose>
+      <link name='rigid_table_link'>
+        <inertial>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+          <mass>1</mass>
+          <pose>0 0 0 0 0 0</pose>
+        </inertial>
+        <collision name='rigid_table_collision'>
+          <geometry>
+            <box>
+              <size>0.90 0.60 0.40</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='rigid_table_visual'>
+          <geometry>
+            <box>
+              <size>0.90 0.60 0.40</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.20 1.0 1.0 1.0</ambient>
+            <diffuse>0.20 1.0 1.0 0.80</diffuse>
+            <specular>1 1 1 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <enable_wind>false</enable_wind>
+      </link>
+      <static>true</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='free_object'>
+      <pose>0.16 0.45 0.471 0 0 0</pose>
+      <link name='free_object_link'>
+        <inertial>
+          <inertia>
+            <ixx>7.100e-4</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>7.100e-4</iyy>
+            <iyz>0</iyz>
+            <izz>2.200e-4</izz>
+          </inertia>
+          <mass>0.365</mass>
+          <pose>0 0 0 0 0 0</pose>
+        </inertial>
+        <collision name='free_object_collision'>
+          <geometry>
+            <cylinder>
+              <radius>0.035</radius>
+              <length>0.14</length>
+            </cylinder>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='free_object_visual'>
+          <geometry>
+            <cylinder>
+              <radius>0.035</radius>
+              <length>0.14</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0.80 0 0.40 1.0</ambient>
+            <diffuse>0.80 0 0.40 0.88</diffuse>
+            <specular>1 1 1 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <enable_wind>false</enable_wind>
+      </link>
+      <static>false</static>
       <self_collide>false</self_collide>
     </model>
     <light name='sun' type='directional'>
