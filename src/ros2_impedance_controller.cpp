@@ -14,10 +14,6 @@
 
 #include "ros2_impedance_controller/ros2_impedance_controller.hpp"
 
-#include <chrono>
-
-#include "pinocchio/math/rpy.hpp"
-
 namespace ros2_impedance_controller
 {
 ImpedanceController::ImpedanceController()
@@ -85,9 +81,49 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     return controller_interface::CallbackReturn::ERROR;
   }
 
+  reference_marker_publisher_ = get_node()->create_publisher<visualization_msgs::msg::Marker>(
+    "~/reference_marker", rclcpp::SystemDefaultsQoS());
+
+  marker_downsample_ = 0;
+  marker_ = visualization_msgs::msg::Marker();
+  marker_.header.frame_id = "world";
+  marker_.ns = "impedance_controller/reference";
+  marker_.id = 23;
+  marker_.type = visualization_msgs::msg::Marker::LINE_LIST;
+  marker_.action = visualization_msgs::msg::Marker::MODIFY;
+  marker_.scale.x = 0.006;
+  marker_.color.r = static_cast<float>(0.99);
+  marker_.color.b = static_cast<float>(0.99);
+  marker_.color.a = static_cast<float>(0.80);
+
+  geometry_msgs::msg::Point origin_point;  // constructor assign zeros
+  geometry_msgs::msg::Point x_point;
+  geometry_msgs::msg::Point y_point;
+  geometry_msgs::msg::Point z_point;
+  x_point.x = 0.1;
+  y_point.y = 0.1;
+  z_point.z = 0.1;
+
+  marker_.points.push_back(origin_point);
+  marker_.points.push_back(x_point);
+  marker_.points.push_back(origin_point);
+  marker_.points.push_back(y_point);
+  marker_.points.push_back(origin_point);
+  marker_.points.push_back(z_point);
+
   reference_subscriber_ = get_node()->create_subscription<ReferenceType>(
     "~/reference", rclcpp::SystemDefaultsQoS(),
-    [this](const ReferenceType::SharedPtr msg) { rt_reference_ptr_.writeFromNonRT(msg); });
+    [this](const ReferenceType::SharedPtr msg)
+    {
+      rt_reference_ptr_.writeFromNonRT(msg);
+      marker_downsample_++;
+      if (0 == marker_downsample_ % 5)
+      {
+        marker_.pose = *msg.get();
+        reference_marker_publisher_->publish(marker_);
+        marker_downsample_ = 0;
+      }
+    });
 
   // Initialize dynamic Eigen members, setting the size and filling with 0s
   robot_positions_ = VectorXd::Zero(degrees_of_freedom_);
