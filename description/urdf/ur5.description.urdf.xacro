@@ -225,9 +225,41 @@
     <parent link="wrist_3_link"/>
     <child link="ee_link"/>
     <origin rpy="0.0 0.0 1.57079632679" xyz="0.0 0.0823 0.0"/>
+    <sensor name="force_torque_sensor" type="force_torque">
+      <update_rate>100</update_rate>
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+      <topic>end_effector_ft</topic>
+      <force_torque>
+        <frame>sensor</frame>
+        <measure_direction>parent_to_child</measure_direction>
+      </force_torque>
+    </sensor>
   </joint>
 
-  <link name="ee_link"/>
+  <link name="ee_link">
+  <!-- Bota Systems AG Rokubi FT sensor -->
+    <visual>
+      <geometry>
+        <cylinder radius="0.024" length="0.032" />
+      </geometry>
+      <origin rpy="0 1.57079632679 0" xyz="0.016 0.0 0.0"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.024" length="0.032" />
+      </geometry>
+      <origin rpy="0 1.57079632679 0" xyz="0.016 0.0 0.0"/>
+    </collision>
+    <inertial>
+      <mass value="0.118"/>
+      <origin rpy="0 1.57079632679 0" xyz="0.016 0.0 0.0"/>
+      <inertia
+        ixx="8.00e-05" ixy="0.0" ixz="0.0"
+        iyy="8.00e-05" iyz="0.0"
+        izz="1.40e-04"/>
+    </inertial>
+  </link>
 
   </xacro:macro>
 

@@ -9,6 +9,7 @@
     <plugin name='gz::sim::systems::UserCommands' filename='gz-sim-user-commands-system'/>
     <plugin name='gz::sim::systems::SceneBroadcaster' filename='gz-sim-scene-broadcaster-system'/>
     <plugin name='gz::sim::systems::Contact' filename='gz-sim-contact-system'/>
+    <plugin name='gz::sim::systems::ForceTorque' filename='gz-sim-forcetorque-system'/>
     <gravity>0.00002 0.00003 -9.78265</gravity>
     <magnetic_field>1.83535e-05 -7.7993e-06 -1.46974e-05</magnetic_field>
     <atmosphere type='adiabatic'/>
