@@ -79,7 +79,7 @@ def generate_launch_description():
             [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
         ),
         launch_arguments={
-            "gz_args": ["-r -v0 ", gazebo_world],
+            "gz_args": ["-r -v4 ", gazebo_world],
             "on_exit_shutdown": "true",
         }.items(),
         condition=IfCondition(gz_gui),
@@ -95,7 +95,7 @@ def generate_launch_description():
         condition=UnlessCondition(gz_gui),
     )
 
-    # Gazebo bridge
+    # Gazebo bridge (https://github.com/gazebosim/ros_gz/tree/ros2/ros_gz_bridge#readme)
     gazebo_bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
