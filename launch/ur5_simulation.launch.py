@@ -70,6 +70,7 @@ def generate_launch_description():
 
     package_share = FindPackageShare("ros2_impedance_controller")
     gazebo_world = PathJoinSubstitution([package_share, "worlds", "benchmark.sdf"])
+    bridges = PathJoinSubstitution([package_share, "config", "ros_gz_bridge.yaml"])
     controllers = PathJoinSubstitution([package_share, "config", "controllers.yaml"])
     rviz_config = PathJoinSubstitution([package_share, "config", "rviz2.rviz"])
 
@@ -99,8 +100,8 @@ def generate_launch_description():
     gazebo_bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
-        arguments=["/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock"],
-        output="log",
+        parameters=[{"config_file": bridges}],
+        output="screen",
     )
     # Robot spawner in Gazebo
     gz_entity_spawner = Node(
