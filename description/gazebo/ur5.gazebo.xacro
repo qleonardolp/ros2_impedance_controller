@@ -9,6 +9,20 @@
       </plugin>
     </gazebo>
 
+    <gazebo reference="ee_fixed_joint">
+      <provideFeedback>true</provideFeedback>
+      <preserveFixedJoint>true</preserveFixedJoint>
+      <sensor name="force_torque_sensor" type="force_torque">
+        <update_rate>100</update_rate>
+        <always_on>true</always_on>
+        <topic>end_effector_ft_sensor</topic>
+        <force_torque>
+          <frame>sensor</frame>
+          <measure_direction>child_to_parent</measure_direction>
+        </force_torque>
+      </sensor>
+    </gazebo>
+
   </xacro:macro>
 
 </robot>

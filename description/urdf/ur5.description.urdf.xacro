@@ -225,16 +225,6 @@
     <parent link="wrist_3_link"/>
     <child link="ee_link"/>
     <origin rpy="0.0 0.0 1.57079632679" xyz="0.0 0.0823 0.0"/>
-    <sensor name="force_torque_sensor" type="force_torque">
-      <update_rate>100</update_rate>
-      <always_on>true</always_on>
-      <visualize>true</visualize>
-      <topic>end_effector_ft</topic>
-      <force_torque>
-        <frame>sensor</frame>
-        <measure_direction>parent_to_child</measure_direction>
-      </force_torque>
-    </sensor>
   </joint>
 
   <link name="ee_link">
@@ -245,11 +235,29 @@
       </geometry>
       <origin rpy="0 1.57079632679 0" xyz="0.016 0.0 0.0"/>
     </visual>
-    <collision>
+    <collision name="sensor_body">
       <geometry>
-        <cylinder radius="0.024" length="0.032" />
+        <cylinder radius="0.024" length="0.026" />
       </geometry>
-      <origin rpy="0 1.57079632679 0" xyz="0.016 0.0 0.0"/>
+      <origin rpy="0 1.57079632679 0" xyz="0.019 0.0 0.0"/>
+    </collision>
+    <collision name="sensor_body_c1">
+      <geometry>
+        <sphere radius="0.006" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.006 -0.02035159 -0.01175"/>
+    </collision>
+    <collision name="sensor_body_c2">
+      <geometry>
+        <sphere radius="0.006" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.006 0.02035159 -0.01175"/>
+    </collision>
+    <collision name="sensor_body_c3">
+      <geometry>
+        <sphere radius="0.006" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.006 0 0.0235"/>
     </collision>
     <inertial>
       <mass value="0.118"/>
