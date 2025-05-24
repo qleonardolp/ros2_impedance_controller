@@ -96,7 +96,7 @@ def generate_launch_description():
         condition=UnlessCondition(gz_gui),
     )
 
-    # Gazebo bridge (https://github.com/gazebosim/ros_gz/tree/ros2/ros_gz_bridge#readme)
+    # ROS-Gazebo bridges
     gazebo_bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
