@@ -223,6 +223,16 @@ controller_interface::return_type ImpedanceController::update(
 
   Vector6d end_effector_twist = jacobian_ * robot_velocities_;
 
+  // Operational space inertia matrix:
+  Matrix6d lambda = (jacobian_ * robot_data_->Minv * jacobian_.transpose()).inverse();
+  Matrix6d inertia_scaling = lambda * taskspace_inertia_inv_;
+
+  if (inertia_shaping_)
+  {
+    RCLCPP_INFO_STREAM(get_node()->get_logger(), "M scaling" << inertia_scaling);
+    inertia_shaping_ = false;
+  }
+
   impedance_wrench_ = taskspace_stiffness_ * update_pose_deviation() +
                       taskspace_damping_ * (desired_twist - end_effector_twist);
 
@@ -354,6 +364,18 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
 
   taskspace_stiffness_.diagonal() = Vector6d(params_.stiffness.data());
   taskspace_damping_.diagonal() = Vector6d(params_.damping.data());
+
+  if (params_.inertia.empty())
+  {
+    RCLCPP_ERROR(
+      get_node()->get_logger(), "Desired inertia matrix empty. Inertia shaping disabled.");
+    inertia_shaping_ = false;
+  }
+  else
+  {
+    taskspace_inertia_inv_ = Vector6d(params_.inertia.data()).cwiseInverse().asDiagonal();
+    inertia_shaping_ = true;
+  }
 
   return controller_interface::CallbackReturn::SUCCESS;
 }

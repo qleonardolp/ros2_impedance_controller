@@ -29,3 +29,8 @@ ros2_impedance_controller:
     default_value: [15.0, 15.0, 15.0, 3.0, 3.0, 3.0],
     description: "Cartesian damping gains [N.s/m, N.s/m, N.s/m, Nm.s/rad, Nm.s/rad, Nm.s/rad]",
   }
+  inertia: {
+    type: double_array,
+    default_value: [],
+    description: "Cartesian inertia matrix [Kg, Kg, Kg, Kg.m², Kg.m², Kg.m²]",
+  }

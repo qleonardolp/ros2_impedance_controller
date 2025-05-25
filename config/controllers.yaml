@@ -20,6 +20,7 @@ impedance_controller:
     interaction_link: ee_link
     stiffness: [625.0, 625.0, 625.0, 169.0, 169.0, 169.0]
     damping: [50.0, 50.0, 50.0, 0.9, 0.9, 0.9]
+    inertia: [10.0, 10.0, 10.0, 0.27, 0.27, 0.27]
     degrees_of_freedom: 6
 
 forward_effort_controller:
