@@ -17,6 +17,7 @@
 
 // Precompile headers
 
+#include "pinocchio/algorithm/aba.hpp"
 #include "pinocchio/algorithm/frames.hpp"
 #include "pinocchio/algorithm/jacobian.hpp"
 #include "pinocchio/algorithm/rnea.hpp"
@@ -25,6 +26,7 @@
 #include "controller_interface/controller_interface.hpp"
 #include "controller_interface/helpers.hpp"
 #include "geometry_msgs/msg/pose.hpp"
+#include "geometry_msgs/msg/wrench.hpp"
 #include "hardware_interface/loaned_command_interface.hpp"
 #include "hardware_interface/loaned_state_interface.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
@@ -34,5 +36,6 @@
 #include "rclcpp/subscription.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 #include "realtime_tools/realtime_buffer.hpp"
+#include "visualization_msgs/msg/marker.hpp"
 
 #endif  // ROS2_IMPEDANCE_CONTROLLER__ROS2_IMPEDANCE_CONTROLLER_PCH_HPP_

@@ -139,21 +139,23 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
   auto logger = get_node()->get_logger();
-  RCLCPP_INFO(logger, "Activating %s...", get_node()->get_name());
+
+  auto ret = read_parameters();
+  if (ret != controller_interface::CallbackReturn::SUCCESS)
+  {
+    return ret;
+  }
 
   jacobian_.setZero();
   impedance_wrench_.setZero();
   effort_commands_.setZero();
 
-  effort_command_interfaces_.clear();
-  position_interfaces_.clear();
-  velocity_interfaces_.clear();
-  effort_interfaces_.clear();
-
   effort_command_interfaces_.resize(degrees_of_freedom_, nullptr);
   position_interfaces_.resize(degrees_of_freedom_, nullptr);
   velocity_interfaces_.resize(degrees_of_freedom_, nullptr);
   effort_interfaces_.resize(degrees_of_freedom_, nullptr);
+
+  inertia_ratio_ = Matrix6d::Identity();
 
   for (const auto & interface : state_interfaces_)  // LoanedStateInterface from the base class
   {
@@ -193,13 +195,18 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   // Reset reference buffer
   rt_reference_ptr_ = realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>>(nullptr);
 
-  RCLCPP_INFO(logger, "... activated successfully");
+  RCLCPP_WARN(logger, "Activated successfully!");
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
 controller_interface::CallbackReturn ImpedanceController::on_deactivate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
+  effort_command_interfaces_.clear();
+  position_interfaces_.clear();
+  velocity_interfaces_.clear();
+  effort_interfaces_.clear();
+
   rt_reference_ptr_ = realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>>(nullptr);
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -223,21 +230,21 @@ controller_interface::return_type ImpedanceController::update(
 
   Vector6d end_effector_twist = jacobian_ * robot_velocities_;
 
-  // Operational space inertia matrix:
-  Matrix6d lambda = (jacobian_ * robot_data_->Minv * jacobian_.transpose()).inverse();
-  Matrix6d inertia_scaling = lambda * taskspace_inertia_inv_;
-
   if (inertia_shaping_)
   {
-    RCLCPP_INFO_STREAM(get_node()->get_logger(), "M scaling" << inertia_scaling);
-    inertia_shaping_ = false;
+    // Operational space inertia matrix:
+    pinocchio::computeMinverse(robot_model_, *robot_data_.get(), robot_positions_);
+    robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
+      robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
+    inertia_ratio_ =
+      (jacobian_ * robot_data_->Minv * jacobian_.transpose()).inverse() * taskspace_inertia_inv_;
   }
 
   impedance_wrench_ = taskspace_stiffness_ * update_pose_deviation() +
                       taskspace_damping_ * (desired_twist - end_effector_twist);
 
   effort_commands_ =
-    jacobian_.transpose() * impedance_wrench_ +
+    jacobian_.transpose() * inertia_ratio_ * impedance_wrench_ +
     pinocchio::computeGeneralizedGravity(robot_model_, *robot_data_.get(), robot_positions_);
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
