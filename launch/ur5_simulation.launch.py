@@ -136,17 +136,6 @@ def generate_launch_description():
         parameters=[robot_description],
     )
 
-    controller_manager = Node(
-        package="controller_manager",
-        executable="ros2_control_node",
-        parameters=[controllers],
-        output="both",
-        emulate_tty=True,
-        remappings=[("~/robot_description", "/robot_description")],
-        prefix=["gdbserver localhost:3000"],
-        condition=IfCondition(debug),
-    )
-
     joint_state_broadcaster_spawner = Node(
         package="controller_manager",
         executable="spawner",
@@ -178,7 +167,6 @@ def generate_launch_description():
         gazebo_bridge,
         robot_state_publisher,
         gz_entity_spawner,
-        controller_manager,
         joint_state_broadcaster_spawner,
         impedance_controller_spawner,
         rviz,
