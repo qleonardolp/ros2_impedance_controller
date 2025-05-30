@@ -105,6 +105,8 @@ protected:
 private:
   void robot_description_param_cb(std::shared_future<std::vector<rclcpp::Parameter>> future);
 
+  void configure_visualization_marker();
+
   std::shared_ptr<rclcpp::AsyncParametersClient> parameters_client_;
   std::string robot_urdf_;
 
@@ -166,7 +168,7 @@ private:
 
   visualization_msgs::msg::Marker marker_;
 
-  uint16_t marker_downsample_;
+  uint16_t marker_downsample_{0};
 };
 
 }  // namespace ros2_impedance_controller

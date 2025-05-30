@@ -81,35 +81,10 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     return controller_interface::CallbackReturn::ERROR;
   }
 
+  configure_visualization_marker();
+
   reference_marker_publisher_ = get_node()->create_publisher<visualization_msgs::msg::Marker>(
     "~/reference_marker", rclcpp::SystemDefaultsQoS());
-
-  marker_downsample_ = 0;
-  marker_ = visualization_msgs::msg::Marker();
-  marker_.header.frame_id = "world";
-  marker_.ns = "impedance_controller/reference";
-  marker_.id = 23;
-  marker_.type = visualization_msgs::msg::Marker::LINE_LIST;
-  marker_.action = visualization_msgs::msg::Marker::MODIFY;
-  marker_.scale.x = 0.006;
-  marker_.color.r = static_cast<float>(0.99);
-  marker_.color.b = static_cast<float>(0.99);
-  marker_.color.a = static_cast<float>(0.80);
-
-  geometry_msgs::msg::Point origin_point;  // constructor assign zeros
-  geometry_msgs::msg::Point x_point;
-  geometry_msgs::msg::Point y_point;
-  geometry_msgs::msg::Point z_point;
-  x_point.x = 0.1;
-  y_point.y = 0.1;
-  z_point.z = 0.1;
-
-  marker_.points.push_back(origin_point);
-  marker_.points.push_back(x_point);
-  marker_.points.push_back(origin_point);
-  marker_.points.push_back(y_point);
-  marker_.points.push_back(origin_point);
-  marker_.points.push_back(z_point);
 
   reference_subscriber_ = get_node()->create_subscription<ReferenceType>(
     "~/reference", rclcpp::SystemDefaultsQoS(),
@@ -259,10 +234,11 @@ controller_interface::return_type ImpedanceController::update(
 
   if (inertia_shaping_)
   {
-    // Operational space inertia matrix:
+    // Joint space inertia matrix (JSIM):
     pinocchio::computeMinverse(robot_model_, *robot_data_.get(), robot_positions_);
     robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
       robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
+    // OSIM * OSIM_d^{-1}:
     inertia_ratio_ =
       (jacobian_ * robot_data_->Minv * jacobian_.transpose()).inverse() * taskspace_inertia_inv_;
   }
@@ -415,6 +391,35 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
   }
 
   return controller_interface::CallbackReturn::SUCCESS;
+}
+
+void ImpedanceController::configure_visualization_marker()
+{
+  marker_ = visualization_msgs::msg::Marker();
+  marker_.header.frame_id = "world";
+  marker_.ns = "impedance_controller/reference";
+  marker_.id = 23;  // Random ID
+  marker_.type = visualization_msgs::msg::Marker::LINE_LIST;
+  marker_.action = visualization_msgs::msg::Marker::MODIFY;
+  marker_.scale.x = 0.006;
+  marker_.color.r = static_cast<float>(0.99);
+  marker_.color.b = static_cast<float>(0.99);
+  marker_.color.a = static_cast<float>(0.80);
+
+  geometry_msgs::msg::Point origin_point;  // constructor assign zeros
+  geometry_msgs::msg::Point x_point;
+  geometry_msgs::msg::Point y_point;
+  geometry_msgs::msg::Point z_point;
+  x_point.x = 0.1;
+  y_point.y = 0.1;
+  z_point.z = 0.1;
+
+  marker_.points.push_back(origin_point);
+  marker_.points.push_back(x_point);
+  marker_.points.push_back(origin_point);
+  marker_.points.push_back(y_point);
+  marker_.points.push_back(origin_point);
+  marker_.points.push_back(z_point);
 }
 
 }  // namespace ros2_impedance_controller
