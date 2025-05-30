@@ -27,13 +27,6 @@ def generate_launch_description():
     declared_arguments = []
     declared_arguments.append(
         DeclareLaunchArgument(
-            "debug",
-            default_value="false",
-            description="Attach gdbserver to the controller manager node.",
-        )
-    )
-    declared_arguments.append(
-        DeclareLaunchArgument(
             "gz_gui",
             default_value="false",
             description="Start Gazebo GUI. The default behavior"
@@ -63,7 +56,6 @@ def generate_launch_description():
     )
 
     # Arguments variables
-    debug = LaunchConfiguration("debug")
     robot_model = LaunchConfiguration("robot")
     gz_gui = LaunchConfiguration("gz_gui")
     controller_name = LaunchConfiguration("controller_name")
