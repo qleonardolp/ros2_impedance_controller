@@ -125,12 +125,17 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
       }
     });
 
-  // Initialize dynamic Eigen members, setting the size and filling with 0s
+  // Initialize dynamic Eigen members
   robot_positions_ = VectorXd::Zero(degrees_of_freedom_);
   robot_velocities_ = VectorXd::Zero(degrees_of_freedom_);
   robot_efforts_ = VectorXd::Zero(degrees_of_freedom_);
   effort_commands_ = VectorXd::Zero(degrees_of_freedom_);
+  gravity_compensation_ = VectorXd::Zero(degrees_of_freedom_);
+  twist_compensation_ = VectorXd::Zero(degrees_of_freedom_);
   jacobian_ = Matrix6Xd::Zero(6, degrees_of_freedom_);
+  jacobian_derivative_ = Matrix6Xd::Zero(6, degrees_of_freedom_);
+  jacobian_pinverse_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, 6);
+  coriolis_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, degrees_of_freedom_);
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -146,15 +151,22 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
     return ret;
   }
 
+  // Dynamic size members
+  coriolis_.setZero();
   jacobian_.setZero();
-  impedance_wrench_.setZero();
+  jacobian_derivative_.setZero();
   effort_commands_.setZero();
+  gravity_compensation_.setZero();
+  twist_compensation_.setZero();
 
+  // ros2_control interfaces
   effort_command_interfaces_.resize(degrees_of_freedom_, nullptr);
   position_interfaces_.resize(degrees_of_freedom_, nullptr);
   velocity_interfaces_.resize(degrees_of_freedom_, nullptr);
   effort_interfaces_.resize(degrees_of_freedom_, nullptr);
 
+  // Constant size members
+  impedance_wrench_.setZero();
   inertia_ratio_ = Matrix6d::Identity();
 
   for (const auto & interface : state_interfaces_)  // LoanedStateInterface from the base class
@@ -230,6 +242,21 @@ controller_interface::return_type ImpedanceController::update(
 
   Vector6d end_effector_twist = jacobian_ * robot_velocities_;
 
+  jacobian_pinverse_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
+
+  pinocchio::getFrameJacobianTimeVariation(
+    robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
+    jacobian_derivative_);
+
+  // Computes the upper triangular part of the joint space inertia matrix M
+  pinocchio::crba(robot_model_, *robot_data_.get(), robot_positions_);
+  robot_data_->M.triangularView<Eigen::StrictlyLower>() =
+    robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
+
+  coriolis_ = pinocchio::getCoriolisMatrix(robot_model_, *robot_data_.get());
+  twist_compensation_ =
+    (coriolis_ - robot_data_->M * jacobian_pinverse_ * jacobian_derivative_) * robot_velocities_;
+
   if (inertia_shaping_)
   {
     // Operational space inertia matrix:
@@ -243,9 +270,11 @@ controller_interface::return_type ImpedanceController::update(
   impedance_wrench_ = taskspace_stiffness_ * update_pose_deviation() +
                       taskspace_damping_ * (desired_twist - end_effector_twist);
 
-  effort_commands_ =
-    jacobian_.transpose() * inertia_ratio_ * impedance_wrench_ +
+  gravity_compensation_ =
     pinocchio::computeGeneralizedGravity(robot_model_, *robot_data_.get(), robot_positions_);
+
+  effort_commands_ = jacobian_.transpose() * inertia_ratio_ * impedance_wrench_ +
+                     twist_compensation_ + gravity_compensation_;
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
@@ -281,7 +310,7 @@ bool ImpedanceController::configure_robot_model()
     return false;
   }
   end_effector_frame_ = robot_model_.getFrameId(params_.interaction_link);
-
+  // TODO(@me): set robot_model_.gravity the same as on the Gazebo .sdf
   RCLCPP_INFO(
     get_node()->get_logger(), "Robot model %s loaded with %d DOFs", robot_model_.name.c_str(),
     robot_model_.nq);
@@ -372,10 +401,11 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
   taskspace_stiffness_.diagonal() = Vector6d(params_.stiffness.data());
   taskspace_damping_.diagonal() = Vector6d(params_.damping.data());
 
-  if (params_.inertia.empty())
+  if (std::fpclassify(params_.inertia[0]) == FP_ZERO)
   {
-    RCLCPP_ERROR(
-      get_node()->get_logger(), "Desired inertia matrix empty. Inertia shaping disabled.");
+    RCLCPP_INFO(
+      get_node()->get_logger(),
+      "First element of the inertia param is 0.0. Inertia shaping disabled.");
     inertia_shaping_ = false;
   }
   else

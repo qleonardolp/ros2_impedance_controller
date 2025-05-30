@@ -15,6 +15,7 @@
 #ifndef ROS2_IMPEDANCE_CONTROLLER__ROS2_IMPEDANCE_CONTROLLER_HPP_
 #define ROS2_IMPEDANCE_CONTROLLER__ROS2_IMPEDANCE_CONTROLLER_HPP_
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -144,7 +145,13 @@ private:
   std::shared_ptr<pinocchio::Data> robot_data_;
 
   Matrix6Xd jacobian_;
+  Matrix6Xd jacobian_derivative_;
+  Eigen::MatrixXd jacobian_pinverse_;
+  Eigen::MatrixXd coriolis_;
   Matrix6d inertia_ratio_;
+
+  VectorXd gravity_compensation_;
+  VectorXd twist_compensation_;
 
   // Controller Reference Subscriber
   realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>> rt_reference_ptr_;

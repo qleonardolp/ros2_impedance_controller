@@ -18,6 +18,7 @@
 // Precompile headers
 
 #include "pinocchio/algorithm/aba.hpp"
+#include "pinocchio/algorithm/crba.hpp"
 #include "pinocchio/algorithm/frames.hpp"
 #include "pinocchio/algorithm/jacobian.hpp"
 #include "pinocchio/algorithm/rnea.hpp"
