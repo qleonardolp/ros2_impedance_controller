@@ -1,9 +1,9 @@
 <sdf version='1.10'>
   <world name='Benchmark'>
-    <physics name='2ms' type='ignored'>
-      <max_step_size>0.002</max_step_size>
+    <physics name='1ms' type='ignored'>
+      <max_step_size>0.001</max_step_size>
       <real_time_factor>1</real_time_factor>
-      <real_time_update_rate>500</real_time_update_rate>
+      <real_time_update_rate>1000</real_time_update_rate>
     </physics>
     <plugin name='gz::sim::systems::Physics' filename='gz-sim-physics-system'/>
     <plugin name='gz::sim::systems::UserCommands' filename='gz-sim-user-commands-system'/>
@@ -67,8 +67,69 @@
       <pose>0 0 0 0 0 0</pose>
       <self_collide>false</self_collide>
     </model>
-    <model name='rigid_wall'>
+    <model name='wall_support'>
       <static>true</static>
+      <pose>0 0 0 0 0 0</pose>
+      <link name='wall_support_left'>
+        <collision name='wall_support_left_collision'>
+          <geometry>
+            <box>
+              <size>0.1 0.1 1.2</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='wall_support_left_visual'>
+          <geometry>
+            <box>
+              <size>0.1 0.1 1.2</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+            <specular>0.8 0.8 0.8 1</specular>
+          </material>
+        </visual>
+        <pose>0.70 0.0 0.60 0 0 0</pose>
+      </link>
+      <link name='wall_support_right'>
+        <collision name='wall_support_right_collision'>
+          <geometry>
+            <box>
+              <size>0.1 0.1 1.2</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='wall_support_right_visual'>
+          <geometry>
+            <box>
+              <size>0.1 0.1 1.2</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+            <specular>0.8 0.8 0.8 1</specular>
+          </material>
+        </visual>
+        <pose>0.70 -1.0 0.60 0 0 0</pose>
+      </link>
+    </model>
+    <model name='rigid_wall'>
       <pose>0.60 -0.50 0.60 0 0 0</pose>
       <link name='rigid_wall_link'>
         <inertial>
@@ -103,6 +164,92 @@
         </visual>
         <pose>0 0 0 0 0 0</pose>
       </link>
+      <link name='wall_sensor_link'>
+        <inertial>
+          <inertia>
+            <ixx>0.19313103</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.11463322</iyy>
+            <iyz>0</iyz>
+            <izz>0.07851485</izz>
+          </inertia>
+          <mass>1.0222179</mass>
+          <pose>0 0 0 0 0 0</pose>
+        </inertial>
+        <visual name='wall_sensor_visual'>
+          <geometry>
+            <box>
+              <size>0.01 0.96 1.16</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.60 1.0 0.20 1.0</ambient>
+            <diffuse>0.60 1.0 0.20 0.80</diffuse>
+          </material>
+        </visual>
+        <collision name='wall_sensor_collision'>
+          <geometry>
+            <box>
+              <size>0.01 0.96 1.16</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <collision name='wall_sensor_c1'>
+          <pose>0.005 -0.48 -0.58  0 0 0</pose>
+          <geometry>
+            <sphere>
+              <radius>0.005</radius>
+            </sphere>
+          </geometry>
+        </collision>
+        <collision name='wall_sensor_c2'>
+          <pose>0.005 0.48 -0.58  0 0 0</pose>
+          <geometry>
+            <sphere>
+              <radius>0.005</radius>
+            </sphere>
+          </geometry>
+        </collision>
+        <collision name='wall_sensor_c3'>
+          <pose>0.005 -0.48 0.58  0 0 0</pose>
+          <geometry>
+            <sphere>
+              <radius>0.005</radius>
+            </sphere>
+          </geometry>
+        </collision>
+        <collision name='wall_sensor_c4'>
+          <pose>0.005 0.48 0.58  0 0 0</pose>
+          <geometry>
+            <sphere>
+              <radius>0.005</radius>
+            </sphere>
+          </geometry>
+        </collision>
+        <pose>-0.06 0 0 0 0 0</pose>
+      </link>
+
+      <joint name='wall_ft_sensor_joint' type='fixed'>
+        <parent>rigid_wall_link</parent>
+        <child>wall_sensor_link</child>
+        <sensor name='force_torque_sensor' type='force_torque'>
+          <update_rate>500</update_rate>
+          <always_on>true</always_on>
+          <topic>wall_ft_sensor</topic>
+          <force_torque>
+            <frame>sensor</frame>
+            <measure_direction>parent_to_child</measure_direction>
+          </force_torque>
+        </sensor>
+      </joint>
     </model>
     <model name='rigid_table'>
       <pose>0.0 0.60 0.20 0 0 0</pose>
