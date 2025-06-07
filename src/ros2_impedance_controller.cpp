@@ -94,7 +94,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
       marker_downsample_++;
       if (0 == marker_downsample_ % 5)
       {
-        marker_.pose = *msg.get();
+        marker_.pose = msg.get()->pose;
         reference_marker_publisher_->publish(marker_);
         marker_downsample_ = 0;
       }
@@ -133,6 +133,7 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   effort_commands_.setZero();
   gravity_compensation_.setZero();
   twist_compensation_.setZero();
+  accel_feedforward_.setZero();
 
   // ros2_control interfaces
   effort_command_interfaces_.resize(degrees_of_freedom_, nullptr);
@@ -141,6 +142,9 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   effort_interfaces_.resize(degrees_of_freedom_, nullptr);
 
   // Constant size members
+  pose_deviation_.setZero();
+  twist_deviation_.setZero();
+  desired_pose_accel_.setZero();
   impedance_wrench_.setZero();
   inertia_ratio_ = Matrix6d::Identity();
 
@@ -208,29 +212,29 @@ controller_interface::return_type ImpedanceController::update(
     return controller_interface::return_type::ERROR;
   }
 
-  Vector6d desired_twist;
-  desired_twist.setZero();
-
   pinocchio::computeFrameJacobian(
     robot_model_, *robot_data_.get(), robot_positions_, end_effector_frame_,
     pinocchio::LOCAL_WORLD_ALIGNED, jacobian_);
 
-  Vector6d end_effector_twist = jacobian_ * robot_velocities_;
-
-  jacobian_pinverse_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
+  update_deviations();  // needs jacobian_ updated
 
   pinocchio::getFrameJacobianTimeVariation(
     robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
     jacobian_derivative_);
+
+  jacobian_pinverse_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
 
   // Computes the upper triangular part of the joint space inertia matrix M
   pinocchio::crba(robot_model_, *robot_data_.get(), robot_positions_);
   robot_data_->M.triangularView<Eigen::StrictlyLower>() =
     robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
 
+  Eigen::MatrixXd m_prod_jinv = robot_data_->M * jacobian_pinverse_;
+
   coriolis_ = pinocchio::getCoriolisMatrix(robot_model_, *robot_data_.get());
-  twist_compensation_ =
-    (coriolis_ - robot_data_->M * jacobian_pinverse_ * jacobian_derivative_) * robot_velocities_;
+  twist_compensation_ = (coriolis_ - m_prod_jinv * jacobian_derivative_) * robot_velocities_;
+
+  accel_feedforward_ = m_prod_jinv * desired_pose_accel_;
 
   if (inertia_shaping_)
   {
@@ -239,18 +243,23 @@ controller_interface::return_type ImpedanceController::update(
     robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
       robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
     // OSIM * OSIM_d^{-1}:
-    inertia_ratio_ =
-      (jacobian_ * robot_data_->Minv * jacobian_.transpose()).inverse() * taskspace_inertia_inv_;
+    Eigen::MatrixXd osim = (jacobian_ * robot_data_->Minv * jacobian_.transpose()).inverse();
+    inertia_ratio_ = osim * taskspace_inertia_inv_;
+    if (debug_visualizer_)
+    {
+      RCLCPP_WARN_STREAM(get_node()->get_logger(), "OSIM = " << osim);
+      debug_visualizer_ = false;
+    }
   }
 
-  impedance_wrench_ = taskspace_stiffness_ * update_pose_deviation() +
-                      taskspace_damping_ * (desired_twist - end_effector_twist);
+  impedance_wrench_ =
+    taskspace_stiffness_ * pose_deviation_ + taskspace_damping_ * twist_deviation_;
 
   gravity_compensation_ =
     pinocchio::computeGeneralizedGravity(robot_model_, *robot_data_.get(), robot_positions_);
 
   effort_commands_ = jacobian_.transpose() * inertia_ratio_ * impedance_wrench_ +
-                     twist_compensation_ + gravity_compensation_;
+                     accel_feedforward_ + twist_compensation_ + gravity_compensation_;
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
@@ -315,11 +324,14 @@ bool ImpedanceController::update_robot()
   return true;
 }
 
-Vector6d ImpedanceController::update_pose_deviation()
+void ImpedanceController::update_deviations()
 {
+  Vector6d actual_twist = jacobian_ * robot_velocities_;
+
   if (*rt_reference_ptr_.readFromNonRT() != nullptr)
   {
-    geometry_msgs::msg::Pose desired_pose = *rt_reference_ptr_.readFromNonRT()->get();
+    ReferenceType desired_kinematic_pose = *rt_reference_ptr_.readFromNonRT()->get();
+    const auto desired_pose = desired_kinematic_pose.pose;
 
     Eigen::Vector3d desired_position(
       desired_pose.position.x, desired_pose.position.y, desired_pose.position.z);
@@ -332,16 +344,32 @@ Vector6d ImpedanceController::update_pose_deviation()
     Eigen::Vector3d actual_position = robot_data_.get()->oMf[end_effector_frame_].translation();
     Eigen::Matrix3d actual_orientation = robot_data_.get()->oMf[end_effector_frame_].rotation();
 
-    Vector6d pose_deviation;
-
-    pose_deviation.head<3>() = desired_position - actual_position;
-    pose_deviation.tail<3>() =
+    pose_deviation_.head<3>() = desired_position - actual_position;
+    pose_deviation_.tail<3>() =
       pinocchio::log3(desired_quaternion.toRotationMatrix() * actual_orientation.transpose());
-    return pose_deviation;
+
+    Vector6d desired_twist;
+    desired_twist.head<3>() = Eigen::Vector3d(
+      desired_kinematic_pose.pose_twist.linear.x, desired_kinematic_pose.pose_twist.linear.y,
+      desired_kinematic_pose.pose_twist.linear.z);
+    desired_twist.tail<3>() = Eigen::Vector3d(
+      desired_kinematic_pose.pose_twist.angular.x, desired_kinematic_pose.pose_twist.angular.y,
+      desired_kinematic_pose.pose_twist.angular.z);
+
+    twist_deviation_ = desired_twist - actual_twist;
+
+    desired_pose_accel_.head<3>() = Eigen::Vector3d(
+      desired_kinematic_pose.pose_accel.linear.x, desired_kinematic_pose.pose_accel.linear.y,
+      desired_kinematic_pose.pose_accel.linear.z);
+    desired_pose_accel_.tail<3>() = Eigen::Vector3d(
+      desired_kinematic_pose.pose_accel.angular.x, desired_kinematic_pose.pose_accel.angular.y,
+      desired_kinematic_pose.pose_accel.angular.z);
   }
   else
   {
-    return Vector6d::Zero();
+    pose_deviation_ = Vector6d::Zero();
+    twist_deviation_ = Vector6d::Zero() - actual_twist;
+    desired_pose_accel_ = Vector6d::Zero();
   }
 }
 

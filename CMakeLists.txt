@@ -15,16 +15,17 @@ set(DEPENDENCIES
   geometry_msgs
   generate_parameter_library
   hardware_interface
+  pinocchio
   pluginlib
   rclcpp
   rclcpp_lifecycle
   realtime_tools
   visualization_msgs
+  kinematic_pose_msgs
 )
 
 find_package(ament_cmake REQUIRED)
 find_package(backward_ros REQUIRED)
-find_package(pinocchio REQUIRED)
 
 foreach(Dependency IN ITEMS ${DEPENDENCIES})
   find_package(${Dependency} REQUIRED)
