@@ -42,12 +42,6 @@ def generate_launch_description():
     )
     declared_arguments.append(
         DeclareLaunchArgument(
-            "use_gazebo",
-            default_value="true",
-        )
-    )
-    declared_arguments.append(
-        DeclareLaunchArgument(
             "controller_name",
             default_value="impedance_controller",
             description="Name of the controller. Useful to debug using the"
@@ -56,8 +50,8 @@ def generate_launch_description():
     )
 
     # Arguments variables
-    robot_model = LaunchConfiguration("robot")
     gz_gui = LaunchConfiguration("gz_gui")
+    robot_model = LaunchConfiguration("robot")
     controller_name = LaunchConfiguration("controller_name")
 
     package_share = FindPackageShare("ros2_impedance_controller")
@@ -104,7 +98,7 @@ def generate_launch_description():
             "-topic",
             "/robot_description",
             "-name",
-            "ur5",
+            "UR5",
             "-allow_renaming",
             "true",
         ],
@@ -119,13 +113,12 @@ def generate_launch_description():
             "use_gazebo:=true",
         ]
     )
-    robot_description = {"robot_description": robot_urdf}
 
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         output="screen",
-        parameters=[robot_description],
+        parameters=[{"robot_description": robot_urdf}],
     )
 
     joint_state_broadcaster_spawner = Node(

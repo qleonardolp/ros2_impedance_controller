@@ -17,12 +17,11 @@
 
 // Precompile headers
 
-#include "pinocchio/algorithm/aba.hpp"
-#include "pinocchio/algorithm/crba.hpp"
-#include "pinocchio/algorithm/frames.hpp"
-#include "pinocchio/algorithm/jacobian.hpp"
-#include "pinocchio/algorithm/rnea.hpp"
-#include "pinocchio/parsers/urdf.hpp"
+#include "pinocchio/algorithm/aba.hpp"     // computeMinverse
+#include "pinocchio/algorithm/crba.hpp"    // crba -> robot.M
+#include "pinocchio/algorithm/frames.hpp"  // computeFrameJacobian
+#include "pinocchio/algorithm/rnea.hpp"    // computeGeneralizedGravity
+#include "pinocchio/parsers/urdf.hpp"      // ::urdf::buildModelFromXML
 
 #include "controller_interface/controller_interface.hpp"
 #include "controller_interface/helpers.hpp"
@@ -31,6 +30,7 @@
 #include "hardware_interface/loaned_command_interface.hpp"
 #include "hardware_interface/loaned_state_interface.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
+#include "kinematic_pose_msgs/msg/kinematic_pose.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/qos.hpp"
 #include "rclcpp/rclcpp.hpp"

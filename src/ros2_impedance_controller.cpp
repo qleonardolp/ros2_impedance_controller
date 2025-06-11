@@ -87,7 +87,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     "~/reference_marker", rclcpp::SystemDefaultsQoS());
 
   reference_subscriber_ = get_node()->create_subscription<ReferenceType>(
-    "~/reference", rclcpp::SystemDefaultsQoS(),
+    "~/reference", rclcpp::ClockQoS(),
     [this](const ReferenceType::SharedPtr msg)
     {
       rt_reference_ptr_.writeFromNonRT(msg);
@@ -101,7 +101,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     });
 
   interaction_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Wrench>(
-    "end_effector_ft_sensor", rclcpp::SystemDefaultsQoS(),
+    "end_effector_ft_sensor", rclcpp::SensorDataQoS(),
     [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
     {
       // TODO(@me): compensate the sensor weight
@@ -306,7 +306,8 @@ bool ImpedanceController::configure_robot_model()
     return false;
   }
   end_effector_frame_ = robot_model_.getFrameId(params_.interaction_link);
-  // TODO(@me): set robot_model_.gravity the same as on the Gazebo .sdf
+  robot_model_.gravity =
+    pinocchio::Motion(Eigen::Vector3d(0.0, 0.0, -9.78265), Eigen::Vector3d::Zero());
   RCLCPP_INFO(
     get_node()->get_logger(), "Robot model %s loaded with %d DOFs", robot_model_.name.c_str(),
     robot_model_.nq);
@@ -330,8 +331,6 @@ bool ImpedanceController::update_robot()
     robot_velocities_(k) = velocity.value();
     robot_efforts_(k) = effort.value();
   }
-  pinocchio::forwardKinematics(robot_model_, *robot_data_.get(), robot_positions_);
-  pinocchio::updateFramePlacement(robot_model_, *robot_data_.get(), end_effector_frame_);
   return true;
 }
 

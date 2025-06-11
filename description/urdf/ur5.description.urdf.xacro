@@ -260,7 +260,8 @@
       <origin rpy="0 0 0" xyz="0.006 0 0.0235"/>
     </collision>
     <inertial>
-      <mass value="0.118"/>
+      <!-- mass value="0.118"/ -->
+      <mass value="0.001"/>
       <origin rpy="0 1.57079632679 0" xyz="0.016 0.0 0.0"/>
       <inertia
         ixx="8.00e-05" ixy="0.0" ixz="0.0"

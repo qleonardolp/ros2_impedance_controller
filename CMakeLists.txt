@@ -1,25 +1,24 @@
 cmake_minimum_required(VERSION 3.16)
-project(ros2_impedance_controller LANGUAGES CXX)
+project(ros2_impedance_controller VERSION 1.0.0 LANGUAGES CXX)
 
 find_package(ros2_control_cmake REQUIRED)
-set_compiler_options()
+set_compiler_options()  # Set compiler according to ROS2 standard
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
 
 set(DEPENDENCIES
-  ament_index_cpp
-  controller_interface
   Eigen3
-  geometry_msgs
-  generate_parameter_library
-  hardware_interface
   pinocchio
+  generate_parameter_library
+  controller_interface
+  hardware_interface
+  realtime_tools
   pluginlib
   rclcpp
   rclcpp_lifecycle
-  realtime_tools
+  geometry_msgs
   visualization_msgs
   kinematic_pose_msgs
 )
