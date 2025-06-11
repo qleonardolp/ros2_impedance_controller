@@ -100,6 +100,19 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
       }
     });
 
+  interaction_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Wrench>(
+    "end_effector_ft_sensor", rclcpp::SystemDefaultsQoS(),
+    [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
+    {
+      // TODO(@me): compensate the sensor weight
+      interaction_wrench_(0) = wrench->force.x;
+      interaction_wrench_(1) = wrench->force.y;
+      interaction_wrench_(2) = wrench->force.z;
+      interaction_wrench_(3) = wrench->torque.x;
+      interaction_wrench_(4) = wrench->torque.y;
+      interaction_wrench_(5) = wrench->torque.z;
+    });
+
   // Initialize dynamic Eigen members
   robot_positions_ = VectorXd::Zero(degrees_of_freedom_);
   robot_velocities_ = VectorXd::Zero(degrees_of_freedom_);
@@ -145,6 +158,7 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   pose_deviation_.setZero();
   twist_deviation_.setZero();
   desired_pose_accel_.setZero();
+  interaction_wrench_.setZero();
   impedance_wrench_.setZero();
   inertia_ratio_ = Matrix6d::Identity();
 
@@ -236,6 +250,9 @@ controller_interface::return_type ImpedanceController::update(
 
   accel_feedforward_ = m_prod_jinv * desired_pose_accel_;
 
+  impedance_wrench_ =
+    taskspace_stiffness_ * pose_deviation_ + taskspace_damping_ * twist_deviation_;
+
   if (inertia_shaping_)
   {
     // Joint space inertia matrix (JSIM):
@@ -245,21 +262,15 @@ controller_interface::return_type ImpedanceController::update(
     // OSIM * OSIM_d^{-1}:
     Eigen::MatrixXd osim = (jacobian_ * robot_data_->Minv * jacobian_.transpose()).inverse();
     inertia_ratio_ = osim * taskspace_inertia_inv_;
-    if (debug_visualizer_)
-    {
-      RCLCPP_WARN_STREAM(get_node()->get_logger(), "OSIM = " << osim);
-      debug_visualizer_ = false;
-    }
+    impedance_wrench_ = inertia_ratio_ * impedance_wrench_ +
+                        (inertia_ratio_ - Matrix6d::Identity()) * interaction_wrench_;
   }
-
-  impedance_wrench_ =
-    taskspace_stiffness_ * pose_deviation_ + taskspace_damping_ * twist_deviation_;
 
   gravity_compensation_ =
     pinocchio::computeGeneralizedGravity(robot_model_, *robot_data_.get(), robot_positions_);
 
-  effort_commands_ = jacobian_.transpose() * inertia_ratio_ * impedance_wrench_ +
-                     accel_feedforward_ + twist_compensation_ + gravity_compensation_;
+  effort_commands_ = jacobian_.transpose() * impedance_wrench_ + accel_feedforward_ +
+                     twist_compensation_ + gravity_compensation_;
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {

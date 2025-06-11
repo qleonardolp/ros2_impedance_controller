@@ -137,6 +137,8 @@ private:
   DiagonalMatrix6d taskspace_inertia_inv_;
   // Desired impedance wrench [forces, torques].T
   Vector6d impedance_wrench_;
+  // Interaction wrench [forces, torques].T
+  Vector6d interaction_wrench_;
   // End effector pose deviation
   Vector6d pose_deviation_;
   // End effector twist deviation
@@ -171,7 +173,6 @@ private:
   rclcpp::Subscription<ReferenceType>::SharedPtr reference_subscriber_;
 
   // Interaction force subscriber
-  realtime_tools::RealtimeBuffer<std::shared_ptr<geometry_msgs::msg::Wrench>> rt_interaction_ptr_;
   rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr interaction_subscriber_;
 
   // Publisher for reference visualization

@@ -16,7 +16,7 @@
     <scene>
       <ambient>0.40 0.40 0.40 1</ambient>
       <background>0.70 0.69 0.69 1</background>
-      <shadows>true</shadows>
+      <shadows>false</shadows>
     </scene>
     <model name='ground_plane'>
       <static>true</static>
