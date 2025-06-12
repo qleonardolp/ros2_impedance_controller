@@ -105,6 +105,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
     {
       // TODO(@me): compensate the sensor weight
+      // TODO(@me): low-pass filter the sensor data.
       interaction_wrench_(0) = wrench->force.x;
       interaction_wrench_(1) = wrench->force.y;
       interaction_wrench_(2) = wrench->force.z;
