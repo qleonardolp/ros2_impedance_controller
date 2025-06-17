@@ -81,22 +81,30 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     return controller_interface::CallbackReturn::ERROR;
   }
 
-  configure_visualization_marker();
+  zspace_publisher_ =
+    get_node()->create_publisher<ReferenceType>("~/zspace", rclcpp::SystemDefaultsQoS());
 
-  reference_marker_publisher_ = get_node()->create_publisher<visualization_msgs::msg::Marker>(
-    "~/reference_marker", rclcpp::SystemDefaultsQoS());
+  if (params_.visualize_reference)
+  {
+    configure_visualization_marker();
+    reference_marker_publisher_ = get_node()->create_publisher<visualization_msgs::msg::Marker>(
+      "~/reference_marker", rclcpp::SystemDefaultsQoS());
+  }
 
   reference_subscriber_ = get_node()->create_subscription<ReferenceType>(
     "~/reference", rclcpp::ClockQoS(),
     [this](const ReferenceType::SharedPtr msg)
     {
       rt_reference_ptr_.writeFromNonRT(msg);
-      marker_downsample_++;
-      if (0 == marker_downsample_ % 5)
+      if (params_.visualize_reference)
       {
-        marker_.pose = msg.get()->pose;
-        reference_marker_publisher_->publish(marker_);
-        marker_downsample_ = 0;
+        marker_downsample_++;
+        if (0 == marker_downsample_ % 5)
+        {
+          marker_.pose = msg.get()->pose;
+          reference_marker_publisher_->publish(marker_);
+          marker_downsample_ = 0;
+        }
       }
     });
 
@@ -280,6 +288,7 @@ controller_interface::return_type ImpedanceController::update(
       return controller_interface::return_type::ERROR;
     }
   }
+  publish_impedance_space();
   return controller_interface::return_type::OK;
 }
 
@@ -381,6 +390,35 @@ void ImpedanceController::update_deviations()
     twist_deviation_ = Vector6d::Zero() - actual_twist;
     desired_pose_accel_ = Vector6d::Zero();
   }
+}
+
+void ImpedanceController::publish_impedance_space()
+{
+  kinematic_pose_msgs::msg::KinematicPose msg;
+
+  msg.pose.position.x = pose_deviation_(0);
+  msg.pose.position.y = pose_deviation_(1);
+  msg.pose.position.z = pose_deviation_(2);
+  // Using the quaternion vector as the angles
+  msg.pose.orientation.x = pose_deviation_(3);
+  msg.pose.orientation.y = pose_deviation_(4);
+  msg.pose.orientation.z = pose_deviation_(5);
+
+  msg.pose_twist.linear.x = twist_deviation_(0);
+  msg.pose_twist.linear.y = twist_deviation_(1);
+  msg.pose_twist.linear.z = twist_deviation_(2);
+  msg.pose_twist.angular.x = twist_deviation_(3);
+  msg.pose_twist.angular.y = twist_deviation_(4);
+  msg.pose_twist.angular.z = twist_deviation_(5);
+
+  msg.pose_accel.linear.x = interaction_wrench_(0);
+  msg.pose_accel.linear.y = interaction_wrench_(1);
+  msg.pose_accel.linear.z = interaction_wrench_(2);
+  msg.pose_accel.angular.x = interaction_wrench_(3);
+  msg.pose_accel.angular.y = interaction_wrench_(4);
+  msg.pose_accel.angular.z = interaction_wrench_(5);
+
+  zspace_publisher_->publish(msg);
 }
 
 void ImpedanceController::robot_description_param_cb(

@@ -31,6 +31,11 @@ ros2_impedance_controller:
   }
   inertia: {
     type: double_array,
-    default_value: [],
+    default_value: [0.0, 1.0, 1.0, 1.0, 1.0, 1.0],
     description: "Cartesian inertia matrix [Kg, Kg, Kg, Kg.m², Kg.m², Kg.m²]",
+  }
+  visualize_reference: {
+    type: bool,
+    default_value: true,
+    read_only: true,
   }

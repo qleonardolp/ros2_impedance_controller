@@ -22,6 +22,7 @@ impedance_controller:
     damping: [50.0, 50.0, 50.0, 0.9, 0.9, 0.9]
     inertia: [0.0, 0.05, 0.05, 3.0, 3.0, 3.0]  # TODO: understand the inertia tensor
     degrees_of_freedom: 6
+    visualize_reference: false
 
 forward_effort_controller:
   ros__parameters:

@@ -96,6 +96,13 @@ protected:
    */
   void update_deviations();
 
+  /**
+   * @brief Convert pose_deviation_ and twist_deviation_ to pose and
+   * twist, respectively. Also include the interaction wrench in the
+   * KinematicPose message and publish it.
+   */
+  void publish_impedance_space();
+
   void declare_parameters();
 
   controller_interface::CallbackReturn read_parameters();
@@ -120,7 +127,6 @@ private:
   bool inertia_shaping_{false};
   bool debug_visualizer_{true};
 
-  // Kinematics parameters
   std::string base_link_;
   std::string interaction_link_;
   size_t degrees_of_freedom_{1};
@@ -170,6 +176,10 @@ private:
 
   // Interaction force subscriber
   rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr interaction_subscriber_;
+
+  // Deviation, deviation derivative and interaction wrench publisher (for impedance space)
+  // Interaction wrench goes on the accel field, replacing accelerations by forces and torques.
+  rclcpp::Publisher<ReferenceType>::SharedPtr zspace_publisher_;
 
   // Publisher for reference visualization
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr reference_marker_publisher_;
