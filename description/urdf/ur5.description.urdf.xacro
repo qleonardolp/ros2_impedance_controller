@@ -208,8 +208,9 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://ros2_impedance_controller/description/meshes/ur5/collision/wrist3.stl"/>
+        <cylinder radius="0.037" length="0.035" />
       </geometry>
+      <origin rpy="1.57079632679 0 0" xyz="0.0 0.065 0.0"/>
     </collision>
     <inertial>
       <mass value="0.18790"/>
@@ -231,7 +232,7 @@
   <!-- Bota Systems AG Rokubi FT sensor -->
     <visual>
       <geometry>
-        <cylinder radius="0.024" length="0.032" />
+        <cylinder radius="0.024" length="0.030" />
       </geometry>
       <origin rpy="0 1.57079632679 0" xyz="0.016 0.0 0.0"/>
       <material name="Orange">
@@ -240,31 +241,14 @@
     </visual>
     <collision name="sensor_body">
       <geometry>
-        <cylinder radius="0.024" length="0.026" />
+        <cylinder radius="0.024" length="0.030" />
       </geometry>
-      <origin rpy="0 1.57079632679 0" xyz="0.019 0.0 0.0"/>
-    </collision>
-    <collision name="sensor_body_c1">
-      <geometry>
-        <sphere radius="0.006" />
-      </geometry>
-      <origin rpy="0 0 0" xyz="0.006 -0.02035159 -0.01175"/>
-    </collision>
-    <collision name="sensor_body_c2">
-      <geometry>
-        <sphere radius="0.006" />
-      </geometry>
-      <origin rpy="0 0 0" xyz="0.006 0.02035159 -0.01175"/>
-    </collision>
-    <collision name="sensor_body_c3">
-      <geometry>
-        <sphere radius="0.006" />
-      </geometry>
-      <origin rpy="0 0 0" xyz="0.006 0 0.0235"/>
+      <origin rpy="0 1.57079632679 0" xyz="0.016 0.0 0.0"/>
+      <max_contacts>6</max_contacts>
     </collision>
     <inertial>
       <!-- mass value="0.118"/ -->
-      <mass value="0.001"/>
+      <mass value="0.054"/>
       <origin rpy="0 1.57079632679 0" xyz="0.016 0.0 0.0"/>
       <inertia
         ixx="8.00e-05" ixy="0.0" ixz="0.0"

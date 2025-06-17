@@ -100,18 +100,18 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
       }
     });
 
+  interaction_wrench_.setZero();
   interaction_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Wrench>(
     "end_effector_ft_sensor", rclcpp::SensorDataQoS(),
     [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
     {
       // TODO(@me): compensate the sensor weight
-      // TODO(@me): low-pass filter the sensor data.
-      interaction_wrench_(0) = wrench->force.x;
-      interaction_wrench_(1) = wrench->force.y;
-      interaction_wrench_(2) = wrench->force.z;
-      interaction_wrench_(3) = wrench->torque.x;
-      interaction_wrench_(4) = wrench->torque.y;
-      interaction_wrench_(5) = wrench->torque.z;
+      Vector6d sensor_wrench;
+      sensor_wrench.head<3>() = Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
+      sensor_wrench.tail<3>() =
+        Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
+      const double lpf_alpha = 0.556862724;  // Low-pass filter, 200 Hz cutoff frequency
+      interaction_wrench_ = lpf_alpha * sensor_wrench + (1 - lpf_alpha) * interaction_wrench_;
     });
 
   // Initialize dynamic Eigen members
@@ -159,7 +159,6 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   pose_deviation_.setZero();
   twist_deviation_.setZero();
   desired_pose_accel_.setZero();
-  interaction_wrench_.setZero();
   impedance_wrench_.setZero();
   inertia_ratio_ = Matrix6d::Identity();
 
