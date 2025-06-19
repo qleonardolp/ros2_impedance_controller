@@ -131,6 +131,10 @@ private:
   std::string interaction_link_;
   size_t degrees_of_freedom_{1};
 
+  pinocchio::Model robot_model_;
+  pinocchio::FrameIndex end_effector_frame_;
+  std::shared_ptr<pinocchio::Data> robot_data_;
+
   // Task space stiffness
   DiagonalMatrix6d taskspace_stiffness_;
   // Task space damping
@@ -140,7 +144,7 @@ private:
   // Desired impedance wrench [forces, torques].T
   Vector6d impedance_wrench_;
   // Interaction wrench [forces, torques].T
-  Vector6d interaction_wrench_;
+  Vector6d sensor_wrench_;
   // End effector pose deviation
   Vector6d pose_deviation_;
   // End effector twist deviation
@@ -148,27 +152,30 @@ private:
   // Desired end effector twist derivative
   Vector6d desired_pose_accel_;
 
+  // update_deviations variables (task space)
+  ReferenceType desired_kpose_;
+  Vector6d actual_twist_;
+  Vector6d desired_twist_;
+  Eigen::Vector3d desired_position_;
+  Eigen::Quaterniond desired_quaternion_;
+
   // Joint space state vectors
   VectorXd robot_positions_;
   VectorXd robot_velocities_;
   VectorXd robot_efforts_;
 
-  // Controller effort command vector (in joint space)
+  // Controller effort command vector (joint space)
   VectorXd effort_commands_;
-
-  pinocchio::Model robot_model_;
-  pinocchio::FrameIndex end_effector_frame_;
-  std::shared_ptr<pinocchio::Data> robot_data_;
+  // Command terms
+  VectorXd twist_compensation_;
+  VectorXd accel_feedforward_;
+  VectorXd impedance_torques_;
 
   Matrix6Xd jacobian_;
   Matrix6Xd jacobian_derivative_;
-  Eigen::MatrixXd jacobian_pinverse_;
+  Eigen::MatrixXd jacobian_pinv_;
+  Eigen::MatrixXd jsim_jpinv_;
   Eigen::MatrixXd coriolis_;
-  Matrix6d inertia_ratio_;
-
-  VectorXd gravity_compensation_;
-  VectorXd twist_compensation_;
-  VectorXd accel_feedforward_;
 
   // Controller Reference Subscriber
   realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>> rt_reference_ptr_;

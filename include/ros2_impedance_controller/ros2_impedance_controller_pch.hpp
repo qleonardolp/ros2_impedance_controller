@@ -17,10 +17,8 @@
 
 // Precompile headers
 
-#include "pinocchio/algorithm/aba.hpp"     // computeMinverse
-#include "pinocchio/algorithm/crba.hpp"    // crba -> robot.M
+#include "pinocchio/algorithm/compute-all-terms.hpp"
 #include "pinocchio/algorithm/frames.hpp"  // computeFrameJacobian
-#include "pinocchio/algorithm/rnea.hpp"    // computeGeneralizedGravity
 #include "pinocchio/parsers/urdf.hpp"      // ::urdf::buildModelFromXML
 
 #include "controller_interface/controller_interface.hpp"

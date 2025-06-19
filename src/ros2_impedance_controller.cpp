@@ -108,31 +108,34 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
       }
     });
 
-  interaction_wrench_.setZero();
+  sensor_wrench_.setZero();
   interaction_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Wrench>(
     "end_effector_ft_sensor", rclcpp::SensorDataQoS(),
     [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
     {
       // TODO(@me): compensate the sensor weight
-      Vector6d sensor_wrench;
-      sensor_wrench.head<3>() = Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
-      sensor_wrench.tail<3>() =
+      Vector6d sensor_wrench_raw;
+      sensor_wrench_raw.head<3>() =
+        Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
+      sensor_wrench_raw.tail<3>() =
         Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
       const double lpf_alpha = 0.556862724;  // Low-pass filter, 200 Hz cutoff frequency
-      interaction_wrench_ = lpf_alpha * sensor_wrench + (1 - lpf_alpha) * interaction_wrench_;
+      sensor_wrench_ = lpf_alpha * sensor_wrench_raw + (1 - lpf_alpha) * sensor_wrench_;
     });
 
   // Initialize dynamic Eigen members
-  robot_positions_ = VectorXd::Zero(degrees_of_freedom_);
-  robot_velocities_ = VectorXd::Zero(degrees_of_freedom_);
-  robot_efforts_ = VectorXd::Zero(degrees_of_freedom_);
-  effort_commands_ = VectorXd::Zero(degrees_of_freedom_);
-  gravity_compensation_ = VectorXd::Zero(degrees_of_freedom_);
-  twist_compensation_ = VectorXd::Zero(degrees_of_freedom_);
+  robot_positions_.resize(degrees_of_freedom_);
+  robot_velocities_.resize(degrees_of_freedom_);
+  robot_efforts_.resize(degrees_of_freedom_);
+  effort_commands_.resize(degrees_of_freedom_);
+  twist_compensation_.resize(degrees_of_freedom_);
+  accel_feedforward_.resize(degrees_of_freedom_);
+  impedance_torques_.resize(degrees_of_freedom_);
   jacobian_ = Matrix6Xd::Zero(6, degrees_of_freedom_);
   jacobian_derivative_ = Matrix6Xd::Zero(6, degrees_of_freedom_);
-  jacobian_pinverse_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, 6);
+  jacobian_pinv_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, 6);
   coriolis_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, degrees_of_freedom_);
+  jsim_jpinv_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, 6);
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -153,9 +156,9 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   jacobian_.setZero();
   jacobian_derivative_.setZero();
   effort_commands_.setZero();
-  gravity_compensation_.setZero();
   twist_compensation_.setZero();
   accel_feedforward_.setZero();
+  impedance_torques_.setZero();
 
   // ros2_control interfaces
   effort_command_interfaces_.resize(degrees_of_freedom_, nullptr);
@@ -168,7 +171,11 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   twist_deviation_.setZero();
   desired_pose_accel_.setZero();
   impedance_wrench_.setZero();
-  inertia_ratio_ = Matrix6d::Identity();
+
+  desired_quaternion_.setIdentity();
+  desired_position_.setZero();
+  desired_twist_.setZero();
+  actual_twist_.setZero();
 
   for (const auto & interface : state_interfaces_)  // LoanedStateInterface from the base class
   {
@@ -244,41 +251,36 @@ controller_interface::return_type ImpedanceController::update(
     robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
     jacobian_derivative_);
 
-  jacobian_pinverse_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
+  jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
 
-  // Computes the upper triangular part of the joint space inertia matrix M
-  pinocchio::crba(robot_model_, *robot_data_.get(), robot_positions_);
   robot_data_->M.triangularView<Eigen::StrictlyLower>() =
     robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
+  jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
 
-  Eigen::MatrixXd m_prod_jinv = robot_data_->M * jacobian_pinverse_;
+  twist_compensation_.noalias() =
+    (robot_data_->C - jsim_jpinv_ * jacobian_derivative_) * robot_velocities_;
 
-  coriolis_ = pinocchio::getCoriolisMatrix(robot_model_, *robot_data_.get());
-  twist_compensation_ = (coriolis_ - m_prod_jinv * jacobian_derivative_) * robot_velocities_;
+  if (!desired_pose_accel_.isZero())
+  {
+    accel_feedforward_ = jsim_jpinv_ * desired_pose_accel_;
+  }
 
-  accel_feedforward_ = m_prod_jinv * desired_pose_accel_;
-
-  impedance_wrench_ =
+  impedance_wrench_.noalias() =
     taskspace_stiffness_ * pose_deviation_ + taskspace_damping_ * twist_deviation_;
 
   if (inertia_shaping_)
   {
-    // Joint space inertia matrix (JSIM):
-    pinocchio::computeMinverse(robot_model_, *robot_data_.get(), robot_positions_);
-    robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
-      robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
-    // OSIM * OSIM_d^{-1}:
-    Eigen::MatrixXd osim = (jacobian_ * robot_data_->Minv * jacobian_.transpose()).inverse();
-    inertia_ratio_ = osim * taskspace_inertia_inv_;
-    impedance_wrench_ = inertia_ratio_ * impedance_wrench_ +
-                        (inertia_ratio_ - Matrix6d::Identity()) * interaction_wrench_;
+    impedance_torques_.noalias() =
+      jsim_jpinv_ * taskspace_inertia_inv_ * (impedance_wrench_ + sensor_wrench_);
+    impedance_torques_.noalias() -= jacobian_.transpose() * sensor_wrench_;
+  }
+  else
+  {
+    impedance_torques_.noalias() = jacobian_.transpose() * impedance_wrench_;
   }
 
-  gravity_compensation_ =
-    pinocchio::computeGeneralizedGravity(robot_model_, *robot_data_.get(), robot_positions_);
-
-  effort_commands_ = jacobian_.transpose() * impedance_wrench_ + accel_feedforward_ +
-                     twist_compensation_ + gravity_compensation_;
+  effort_commands_.noalias() =
+    accel_feedforward_ + impedance_torques_ + twist_compensation_ + robot_data_->g;
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
@@ -340,55 +342,55 @@ bool ImpedanceController::update_robot()
     robot_velocities_(k) = velocity.value();
     robot_efforts_(k) = effort.value();
   }
+  pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_positions_, robot_velocities_);
   return true;
 }
 
 void ImpedanceController::update_deviations()
 {
-  Vector6d actual_twist = jacobian_ * robot_velocities_;
+  actual_twist_.noalias() = jacobian_ * robot_velocities_;
 
   if (*rt_reference_ptr_.readFromNonRT() != nullptr)
   {
-    ReferenceType desired_kinematic_pose = *rt_reference_ptr_.readFromNonRT()->get();
-    const auto desired_pose = desired_kinematic_pose.pose;
+    desired_kpose_ = *rt_reference_ptr_.readFromNonRT()->get();
 
-    Eigen::Vector3d desired_position(
-      desired_pose.position.x, desired_pose.position.y, desired_pose.position.z);
+    desired_position_.x() = desired_kpose_.pose.position.x;
+    desired_position_.y() = desired_kpose_.pose.position.y;
+    desired_position_.z() = desired_kpose_.pose.position.z;
 
-    Eigen::Quaterniond desired_quaternion(
-      desired_pose.orientation.w, desired_pose.orientation.x, desired_pose.orientation.y,
-      desired_pose.orientation.z);
-    desired_quaternion.normalize();
+    desired_quaternion_.w() = desired_kpose_.pose.orientation.w;
+    desired_quaternion_.x() = desired_kpose_.pose.orientation.x;
+    desired_quaternion_.y() = desired_kpose_.pose.orientation.y;
+    desired_quaternion_.z() = desired_kpose_.pose.orientation.z;
+    desired_quaternion_.normalize();
 
-    Eigen::Vector3d actual_position = robot_data_.get()->oMf[end_effector_frame_].translation();
-    Eigen::Matrix3d actual_orientation = robot_data_.get()->oMf[end_effector_frame_].rotation();
+    pose_deviation_.head<3>().noalias() =
+      desired_position_ - robot_data_.get()->oMf[end_effector_frame_].translation();
+    pose_deviation_.tail<3>().noalias() = pinocchio::log3(
+      desired_quaternion_.toRotationMatrix() *
+      robot_data_.get()->oMf[end_effector_frame_].rotation().transpose());
 
-    pose_deviation_.head<3>() = desired_position - actual_position;
-    pose_deviation_.tail<3>() =
-      pinocchio::log3(desired_quaternion.toRotationMatrix() * actual_orientation.transpose());
+    desired_twist_(0) = desired_kpose_.pose_twist.linear.x;
+    desired_twist_(1) = desired_kpose_.pose_twist.linear.y;
+    desired_twist_(2) = desired_kpose_.pose_twist.linear.z;
+    desired_twist_(3) = desired_kpose_.pose_twist.angular.x;
+    desired_twist_(4) = desired_kpose_.pose_twist.angular.y;
+    desired_twist_(5) = desired_kpose_.pose_twist.angular.z;
 
-    Vector6d desired_twist;
-    desired_twist.head<3>() = Eigen::Vector3d(
-      desired_kinematic_pose.pose_twist.linear.x, desired_kinematic_pose.pose_twist.linear.y,
-      desired_kinematic_pose.pose_twist.linear.z);
-    desired_twist.tail<3>() = Eigen::Vector3d(
-      desired_kinematic_pose.pose_twist.angular.x, desired_kinematic_pose.pose_twist.angular.y,
-      desired_kinematic_pose.pose_twist.angular.z);
+    twist_deviation_.noalias() = desired_twist_ - actual_twist_;
 
-    twist_deviation_ = desired_twist - actual_twist;
-
-    desired_pose_accel_.head<3>() = Eigen::Vector3d(
-      desired_kinematic_pose.pose_accel.linear.x, desired_kinematic_pose.pose_accel.linear.y,
-      desired_kinematic_pose.pose_accel.linear.z);
-    desired_pose_accel_.tail<3>() = Eigen::Vector3d(
-      desired_kinematic_pose.pose_accel.angular.x, desired_kinematic_pose.pose_accel.angular.y,
-      desired_kinematic_pose.pose_accel.angular.z);
+    desired_pose_accel_(0) = desired_kpose_.pose_accel.linear.x;
+    desired_pose_accel_(1) = desired_kpose_.pose_accel.linear.y;
+    desired_pose_accel_(2) = desired_kpose_.pose_accel.linear.z;
+    desired_pose_accel_(3) = desired_kpose_.pose_accel.angular.x;
+    desired_pose_accel_(4) = desired_kpose_.pose_accel.angular.y;
+    desired_pose_accel_(5) = desired_kpose_.pose_accel.angular.z;
   }
   else
   {
-    pose_deviation_ = Vector6d::Zero();
-    twist_deviation_ = Vector6d::Zero() - actual_twist;
-    desired_pose_accel_ = Vector6d::Zero();
+    pose_deviation_.setZero();
+    twist_deviation_.noalias() = -actual_twist_;
+    desired_pose_accel_.setZero();
   }
 }
 
@@ -411,12 +413,12 @@ void ImpedanceController::publish_impedance_space()
   msg.pose_twist.angular.y = twist_deviation_(4);
   msg.pose_twist.angular.z = twist_deviation_(5);
 
-  msg.pose_accel.linear.x = interaction_wrench_(0);
-  msg.pose_accel.linear.y = interaction_wrench_(1);
-  msg.pose_accel.linear.z = interaction_wrench_(2);
-  msg.pose_accel.angular.x = interaction_wrench_(3);
-  msg.pose_accel.angular.y = interaction_wrench_(4);
-  msg.pose_accel.angular.z = interaction_wrench_(5);
+  msg.pose_accel.linear.x = sensor_wrench_(0);
+  msg.pose_accel.linear.y = sensor_wrench_(1);
+  msg.pose_accel.linear.z = sensor_wrench_(2);
+  msg.pose_accel.angular.x = sensor_wrench_(3);
+  msg.pose_accel.angular.y = sensor_wrench_(4);
+  msg.pose_accel.angular.z = sensor_wrench_(5);
 
   zspace_publisher_->publish(msg);
 }

@@ -8,6 +8,10 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
 
+if(${CMAKE_BUILD_TYPE} STREQUAL "Release")
+  message(STATUS "Building Release, with flags ${CMAKE_CXX_FLAGS_RELEASE}")
+endif()
+
 set(DEPENDENCIES
   Eigen3
   pinocchio

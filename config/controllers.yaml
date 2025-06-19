@@ -1,10 +1,21 @@
 controller_manager:
   ros__parameters:
     update_rate: 1000  # Hz
+    thread_priority: 98  # Range: 0-99. Default is 50
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
 
+    diagnostics:
+      threshold:
+        controllers:
+          execution_time:  # refers to controller's update cycle execution time in us
+            mean_error:
+              warn: 1000.0
+              error: 2000.0
+            standard_deviation:
+              warn: 100.0
+              error: 200.0
 
 impedance_controller:
   ros__parameters:
@@ -20,7 +31,7 @@ impedance_controller:
     interaction_link: ee_link
     stiffness: [625.0, 625.0, 625.0, 169.0, 169.0, 169.0]
     damping: [50.0, 50.0, 50.0, 0.9, 0.9, 0.9]
-    inertia: [0.0, 0.05, 0.05, 3.0, 3.0, 3.0]  # TODO: understand the inertia tensor
+    inertia: [0.05, 0.05, 0.05, 3.0, 3.0, 3.0]  # TODO: understand the inertia tensor
     degrees_of_freedom: 6
     visualize_reference: false
 
