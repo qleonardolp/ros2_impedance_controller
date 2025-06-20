@@ -29,9 +29,9 @@ impedance_controller:
       - wrist_3_joint
     base_link: base_link
     interaction_link: ee_link
-    stiffness: [625.0, 625.0, 625.0, 169.0, 169.0, 169.0]
-    damping: [50.0, 50.0, 50.0, 0.9, 0.9, 0.9]
-    inertia: [0.05, 0.05, 0.05, 3.0, 3.0, 3.0]  # TODO: understand the inertia tensor
+    stiffness: [1000.0, 1000.0, 1000.0, 300.0, 300.0, 300.0]
+    damping: [83.0, 83.0, 83.0, 1.7, 1.7, 1.7]
+    taskspace_mass: 10.58345
     degrees_of_freedom: 6
     visualize_reference: false
 

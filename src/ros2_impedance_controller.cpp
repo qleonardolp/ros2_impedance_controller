@@ -437,6 +437,7 @@ void ImpedanceController::declare_parameters()
 controller_interface::CallbackReturn ImpedanceController::read_parameters()
 {
   params_ = param_listener_->get_params();
+  degrees_of_freedom_ = params_.degrees_of_freedom;
 
   if (params_.joints.empty())
   {
@@ -444,30 +445,32 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     return controller_interface::CallbackReturn::ERROR;
   }
 
-  degrees_of_freedom_ = params_.degrees_of_freedom;
+  taskspace_stiffness_ = Vector6d(params_.stiffness.data()).asDiagonal();
+  // Default task space generalized inertia matrix diagonal, with the robot mass.
+  Vector6d ts_inertia_diag(21.167, 21.167, 21.167, 1.529, 1.529, 1.529);
 
-  if (params_.stiffness.empty() || params_.damping.empty())
-  {
-    RCLCPP_ERROR(get_node()->get_logger(), "Stiffness or damping array parameters were empty");
-    return controller_interface::CallbackReturn::ERROR;
-  }
-
-  taskspace_stiffness_.diagonal() = Vector6d(params_.stiffness.data());
-  taskspace_damping_.diagonal() = Vector6d(params_.damping.data());
-
-  if (std::fpclassify(params_.inertia[0]) == FP_ZERO)
+  if (std::fpclassify(params_.taskspace_mass) == FP_ZERO)
   {
     RCLCPP_INFO(
-      get_node()->get_logger(),
-      "First element of the inertia param is 0.0. Inertia shaping disabled.");
+      get_node()->get_logger(), "Desired Cartesian mass is 0.0. Inertia shaping disabled.");
+    taskspace_damping_.diagonal() = Vector6d(params_.damping.data());
     inertia_shaping_ = false;
   }
   else
   {
-    taskspace_inertia_inv_ = Vector6d(params_.inertia.data()).cwiseInverse().asDiagonal();
+    const double mass = params_.taskspace_mass;
+    const double I = 0.4 * mass * (0.425 * 0.425);  // sphere moment of inertia
+    ts_inertia_diag << mass, mass, mass, I, I, I;
+    taskspace_inertia_inv_ = ts_inertia_diag.cwiseInverse().asDiagonal();
+    // Critically damped: D = 2 * sqrt(K * M)
+    taskspace_damping_.diagonal() =
+      2 * (ts_inertia_diag.array() * taskspace_stiffness_.diagonal().array()).abs().sqrt();
     inertia_shaping_ = true;
   }
 
+  RCLCPP_INFO_STREAM(
+    get_node()->get_logger(), "Damping matrix diagonal: \n"
+                                << taskspace_damping_.diagonal());
   return controller_interface::CallbackReturn::SUCCESS;
 }
 

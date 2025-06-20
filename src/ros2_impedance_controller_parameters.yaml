@@ -21,18 +21,21 @@ ros2_impedance_controller:
   }
   stiffness: {
     type: double_array,
-    default_value: [250.0, 250.0, 250.0, 10.0, 10.0, 10.0],
+    default_value: [1000.0, 1000.0, 1000.0, 300.0, 300.0, 300.0],
     description: "Cartesian stiffness gains [N/m, N/m, N/m, Nm/rad, Nm/rad, Nm/rad]",
   }
   damping: {
     type: double_array,
-    default_value: [15.0, 15.0, 15.0, 3.0, 3.0, 3.0],
+    default_value: [205.752, 205.752, 205.752, 30.2917, 30.2917, 30.2917],
     description: "Cartesian damping gains [N.s/m, N.s/m, N.s/m, Nm.s/rad, Nm.s/rad, Nm.s/rad]",
   }
-  inertia: {
-    type: double_array,
-    default_value: [0.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-    description: "Cartesian inertia matrix [Kg, Kg, Kg, Kg.m², Kg.m², Kg.m²]",
+  taskspace_mass: {
+    type: double,
+    default_value: 10.58345,
+    description: "Desired Cartesian mass. This value defines m_x, m_y, and m_z,
+    since the translational part of the generalized inertia matrix must be the same.
+    The inertia tensor (rotational part) is of a solid sphere with this mass, and
+    radius 0.5 m.",
   }
   visualize_reference: {
     type: bool,
