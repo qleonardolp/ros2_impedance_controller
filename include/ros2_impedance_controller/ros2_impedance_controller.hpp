@@ -175,7 +175,6 @@ private:
   Matrix6Xd jacobian_derivative_;
   Eigen::MatrixXd jacobian_pinv_;
   Eigen::MatrixXd jsim_jpinv_;
-  Eigen::MatrixXd coriolis_;
 
   // Controller Reference Subscriber
   realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>> rt_reference_ptr_;

@@ -134,7 +134,6 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
   jacobian_ = Matrix6Xd::Zero(6, degrees_of_freedom_);
   jacobian_derivative_ = Matrix6Xd::Zero(6, degrees_of_freedom_);
   jacobian_pinv_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, 6);
-  coriolis_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, degrees_of_freedom_);
   jsim_jpinv_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, 6);
 
   return controller_interface::CallbackReturn::SUCCESS;
@@ -152,7 +151,6 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   }
 
   // Dynamic size members
-  coriolis_.setZero();
   jacobian_.setZero();
   jacobian_derivative_.setZero();
   effort_commands_.setZero();
