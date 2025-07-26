@@ -29,17 +29,24 @@ namespace ros2_impedance_controller
 {
 using ReferenceType = kinematic_pose_msgs::msg::KinematicPose;
 
-using DiagonalMatrix6d = Eigen::DiagonalMatrix<double, 6>;
-using Vector6d = Eigen::Matrix<double, 6, 1>;
-using Matrix6d = Eigen::Matrix<double, 6, 6>;
+const uint8_t kCartesianSpaceDim = 6;
 
-const uint8_t kMaxJointSpaceSize = 12;  // avoiding dynamic memory allocation
+using DiagonalMatrix6d = Eigen::DiagonalMatrix<double, kCartesianSpaceDim>;
+using Vector6d = Eigen::Matrix<double, kCartesianSpaceDim, 1>;
+using Matrix6d = Eigen::Matrix<double, kCartesianSpaceDim, kCartesianSpaceDim>;
 
-typedef Eigen::Matrix<double, 6, Eigen::Dynamic, 0, 6, kMaxJointSpaceSize> Matrix6Xd;
-typedef Eigen::Matrix<double, Eigen::Dynamic, 1, 0, kMaxJointSpaceSize, 1> VectorXd;
+const uint8_t kMaxJointSpaceDim = 12;  // avoiding dynamic memory allocation
+
+typedef Eigen::Matrix<
+  double, kCartesianSpaceDim, Eigen::Dynamic, 0, kCartesianSpaceDim, kMaxJointSpaceDim>
+  Matrix6Xd;
+typedef Eigen::Matrix<double, Eigen::Dynamic, 1, 0, kMaxJointSpaceDim, 1> VectorXd;
+
+// Default task space generalized inertia matrix diagonal, with the robot mass.
+const Vector6d kDefaultInertia(21.1670, 21.1670, 21.1670, 1.5290, 1.5290, 1.5290);
 
 /**
- * \brief Cartesian Impedance Controller for Manipulators.
+ * \brief Cartesian impedance controller for articulated robots.
  */
 class ImpedanceController : public controller_interface::ControllerInterface
 {
@@ -57,6 +64,9 @@ public:
   controller_interface::CallbackReturn on_init() override;
 
   controller_interface::CallbackReturn on_configure(
+    const rclcpp_lifecycle::State & previous_state) override;
+
+  controller_interface::CallbackReturn on_cleanup(
     const rclcpp_lifecycle::State & previous_state) override;
 
   controller_interface::CallbackReturn on_activate(
@@ -84,7 +94,9 @@ protected:
    * @brief Update the robot data while running the controller.
    * State interfaces are fetch and the Forward Kinematics is computed.
    */
-  bool update_robot();
+  bool update_robot(const rclcpp::Time & t, const rclcpp::Duration & dt);
+
+  rclcpp::Time clock_time_;
 
   /**
    * @brief Update the end-effector pose and twist deviations (errors).
@@ -103,7 +115,7 @@ protected:
    */
   void publish_impedance_space();
 
-  void declare_parameters();
+  ReferenceType diagnostics_msg_;
 
   controller_interface::CallbackReturn read_parameters();
 
@@ -135,12 +147,12 @@ private:
   pinocchio::FrameIndex end_effector_frame_;
   std::shared_ptr<pinocchio::Data> robot_data_;
 
-  // Task space stiffness
-  DiagonalMatrix6d taskspace_stiffness_;
-  // Task space damping
-  DiagonalMatrix6d taskspace_damping_;
-  // Inverse of the task space inertia
-  DiagonalMatrix6d taskspace_inertia_inv_;
+  // Desired stiffness
+  DiagonalMatrix6d desired_stiffness_;
+  // Desired damping
+  DiagonalMatrix6d desired_damping_;
+  // Inverse of the desired inertia
+  DiagonalMatrix6d desired_inertia_inv_;
   // Desired impedance wrench [forces, torques].T
   Vector6d impedance_wrench_;
   // Interaction wrench [forces, torques].T
@@ -162,6 +174,8 @@ private:
   // Joint space state vectors
   VectorXd robot_positions_;
   VectorXd robot_velocities_;
+  VectorXd robot_velocities_last_;
+  VectorXd robot_accelerations_;
   VectorXd robot_efforts_;
 
   // Controller effort command vector (joint space)

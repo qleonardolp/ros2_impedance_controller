@@ -29,8 +29,9 @@ impedance_controller:
       - wrist_3_joint
     base_link: base_link
     interaction_link: ee_link
+    ft_sensor_topic: end_effector_ft_sensor
     stiffness: [1000.0, 1000.0, 1000.0, 300.0, 300.0, 300.0]
-    damping: [83.0, 83.0, 83.0, 1.7, 1.7, 1.7]
+#    damping: [83.0, 83.0, 83.0, 1.7, 1.7, 1.7]
     taskspace_mass: 10.58345
     degrees_of_freedom: 6
     visualize_reference: false

@@ -14,10 +14,16 @@ ros2_impedance_controller:
     default_value: "",
     description: "Name of the link used for interaction port, usually is the robot end effector.",
   }
+  ft_sensor_topic: {
+    type: string,
+    default_value: "",
+    description: "Force-torque sensor topic name",
+  }
   degrees_of_freedom: {
     type: int,
     default_value: 6,
-    description: "Expected degrees of freedom (joints) between the base_link and the interaction_link. It is updated according the parsed URDF.",
+    description: "Expected degrees of freedom (joints) between the base_link and the interaction_link.
+    It is updated according the parsed URDF.",
   }
   stiffness: {
     type: double_array,
@@ -26,7 +32,7 @@ ros2_impedance_controller:
   }
   damping: {
     type: double_array,
-    default_value: [205.752, 205.752, 205.752, 30.2917, 30.2917, 30.2917],
+    default_value: [],
     description: "Cartesian damping gains [N.s/m, N.s/m, N.s/m, Nm.s/rad, Nm.s/rad, Nm.s/rad]",
   }
   taskspace_mass: {

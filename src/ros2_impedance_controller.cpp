@@ -53,7 +53,7 @@ controller_interface::CallbackReturn ImpedanceController::on_init()
 {
   try
   {
-    declare_parameters();
+    param_listener_ = std::make_shared<ParamListener>(get_node());
   }
   catch (const std::exception & e)
   {
@@ -81,8 +81,11 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     return controller_interface::CallbackReturn::ERROR;
   }
 
-  zspace_publisher_ =
-    get_node()->create_publisher<ReferenceType>("~/zspace", rclcpp::SystemDefaultsQoS());
+  auto qos_lowlatency = rclcpp::QoS(1);
+  qos_lowlatency.best_effort().durability_volatile();
+  qos_lowlatency.liveliness(RMW_QOS_POLICY_LIVELINESS_AUTOMATIC);
+
+  zspace_publisher_ = get_node()->create_publisher<ReferenceType>("~/zspace", qos_lowlatency);
 
   if (params_.visualize_reference)
   {
@@ -92,7 +95,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
   }
 
   reference_subscriber_ = get_node()->create_subscription<ReferenceType>(
-    "~/reference", rclcpp::ClockQoS(),
+    "~/reference", qos_lowlatency,
     [this](const ReferenceType::SharedPtr msg)
     {
       rt_reference_ptr_.writeFromNonRT(msg);
@@ -109,32 +112,50 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     });
 
   sensor_wrench_.setZero();
-  interaction_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Wrench>(
-    "end_effector_ft_sensor", rclcpp::SensorDataQoS(),
-    [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
-    {
-      // TODO(@me): compensate the sensor weight
-      Vector6d sensor_wrench_raw;
-      sensor_wrench_raw.head<3>() =
-        Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
-      sensor_wrench_raw.tail<3>() =
-        Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
-      const double lpf_alpha = 0.556862724;  // Low-pass filter, 200 Hz cutoff frequency
-      sensor_wrench_ = lpf_alpha * sensor_wrench_raw + (1 - lpf_alpha) * sensor_wrench_;
-    });
+
+  if (inertia_shaping_)
+  {
+    interaction_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Wrench>(
+      params_.ft_sensor_topic, qos_lowlatency,
+      [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
+      {
+        // TODO(@me): compensate the sensor weight
+        Vector6d sensor_wrench_raw;
+        sensor_wrench_raw.head<3>() =
+          Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
+        sensor_wrench_raw.tail<3>() =
+          Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
+        const double lpf_alpha = 0.556862724;  // Low-pass filter, 200 Hz cutoff frequency
+        sensor_wrench_ = lpf_alpha * sensor_wrench_raw + (1 - lpf_alpha) * sensor_wrench_;
+      });
+  }
 
   // Initialize dynamic Eigen members
   robot_positions_.resize(degrees_of_freedom_);
   robot_velocities_.resize(degrees_of_freedom_);
+  robot_velocities_last_.resize(degrees_of_freedom_);
+  robot_accelerations_.resize(degrees_of_freedom_);
   robot_efforts_.resize(degrees_of_freedom_);
   effort_commands_.resize(degrees_of_freedom_);
   twist_compensation_.resize(degrees_of_freedom_);
   accel_feedforward_.resize(degrees_of_freedom_);
   impedance_torques_.resize(degrees_of_freedom_);
-  jacobian_ = Matrix6Xd::Zero(6, degrees_of_freedom_);
-  jacobian_derivative_ = Matrix6Xd::Zero(6, degrees_of_freedom_);
-  jacobian_pinv_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, 6);
-  jsim_jpinv_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, 6);
+  jacobian_ = Matrix6Xd::Zero(kCartesianSpaceDim, degrees_of_freedom_);
+  jacobian_derivative_ = Matrix6Xd::Zero(kCartesianSpaceDim, degrees_of_freedom_);
+  jacobian_pinv_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, kCartesianSpaceDim);
+  jsim_jpinv_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, kCartesianSpaceDim);
+
+  return controller_interface::CallbackReturn::SUCCESS;
+}
+
+controller_interface::CallbackReturn ImpedanceController::on_cleanup(
+  const rclcpp_lifecycle::State & /*previous_state*/)
+{
+  rt_reference_ptr_.reset();
+  reference_subscriber_.reset();
+  interaction_subscriber_.reset();
+  zspace_publisher_.reset();
+  reference_marker_publisher_.reset();
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -150,13 +171,14 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
     return ret;
   }
 
-  // Dynamic size members
+  // Dynamic size members (joint space dim)
   jacobian_.setZero();
   jacobian_derivative_.setZero();
   effort_commands_.setZero();
   twist_compensation_.setZero();
   accel_feedforward_.setZero();
   impedance_torques_.setZero();
+  robot_velocities_last_.setZero();
 
   // ros2_control interfaces
   effort_command_interfaces_.resize(degrees_of_freedom_, nullptr);
@@ -164,7 +186,7 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   velocity_interfaces_.resize(degrees_of_freedom_, nullptr);
   effort_interfaces_.resize(degrees_of_freedom_, nullptr);
 
-  // Constant size members
+  // Constant size members (task space dim)
   pose_deviation_.setZero();
   twist_deviation_.setZero();
   desired_pose_accel_.setZero();
@@ -214,6 +236,8 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   rt_reference_ptr_ = realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>>(nullptr);
 
   RCLCPP_WARN(logger, "Activated successfully!");
+
+  clock_time_ = get_node()->get_clock()->now();
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -230,10 +254,10 @@ controller_interface::CallbackReturn ImpedanceController::on_deactivate(
 }
 
 controller_interface::return_type ImpedanceController::update(
-  const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
+  const rclcpp::Time & time, const rclcpp::Duration & period)
 {
   // Read state interfaces and update robot
-  if (!update_robot())
+  if (!update_robot(time, period))
   {
     RCLCPP_ERROR(get_node()->get_logger(), "Failed to update robot model with state data");
     return controller_interface::return_type::ERROR;
@@ -264,12 +288,12 @@ controller_interface::return_type ImpedanceController::update(
   }
 
   impedance_wrench_.noalias() =
-    taskspace_stiffness_ * pose_deviation_ + taskspace_damping_ * twist_deviation_;
+    desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
 
   if (inertia_shaping_)
   {
     impedance_torques_.noalias() =
-      jsim_jpinv_ * taskspace_inertia_inv_ * (impedance_wrench_ + sensor_wrench_);
+      jsim_jpinv_ * desired_inertia_inv_ * (impedance_wrench_ + sensor_wrench_);
     impedance_torques_.noalias() -= jacobian_.transpose() * sensor_wrench_;
   }
   else
@@ -277,8 +301,7 @@ controller_interface::return_type ImpedanceController::update(
     impedance_torques_.noalias() = jacobian_.transpose() * impedance_wrench_;
   }
 
-  effort_commands_.noalias() =
-    accel_feedforward_ + impedance_torques_ + twist_compensation_ + robot_data_->g;
+  effort_commands_ = accel_feedforward_ + impedance_torques_ + twist_compensation_ + robot_data_->g;
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
@@ -323,7 +346,7 @@ bool ImpedanceController::configure_robot_model()
   return true;
 }
 
-bool ImpedanceController::update_robot()
+bool ImpedanceController::update_robot(const rclcpp::Time & t, const rclcpp::Duration & /*dt*/)
 {
   for (uint8_t k = 0; k < degrees_of_freedom_; k++)
   {
@@ -339,6 +362,13 @@ bool ImpedanceController::update_robot()
     robot_positions_(k) = position.value();
     robot_velocities_(k) = velocity.value();
     robot_efforts_(k) = effort.value();
+
+    // Finite difference
+    double ellapsed_time = static_cast<double>((t - clock_time_).nanoseconds()) * 1E-9;
+
+    robot_accelerations_(k) = (robot_velocities_(k) - robot_velocities_last_(k)) / ellapsed_time;
+    robot_velocities_last_(k) = robot_velocities_(k);
+    clock_time_ = t;
   }
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_positions_, robot_velocities_);
   return true;
@@ -394,42 +424,48 @@ void ImpedanceController::update_deviations()
 
 void ImpedanceController::publish_impedance_space()
 {
-  kinematic_pose_msgs::msg::KinematicPose msg;
-
-  msg.pose.position.x = pose_deviation_(0);
-  msg.pose.position.y = pose_deviation_(1);
-  msg.pose.position.z = pose_deviation_(2);
+  diagnostics_msg_.pose.position.x = pose_deviation_(0);
+  diagnostics_msg_.pose.position.y = pose_deviation_(1);
+  diagnostics_msg_.pose.position.z = pose_deviation_(2);
   // Using the quaternion vector as the angles
-  msg.pose.orientation.x = pose_deviation_(3);
-  msg.pose.orientation.y = pose_deviation_(4);
-  msg.pose.orientation.z = pose_deviation_(5);
+  diagnostics_msg_.pose.orientation.x = pose_deviation_(3);
+  diagnostics_msg_.pose.orientation.y = pose_deviation_(4);
+  diagnostics_msg_.pose.orientation.z = pose_deviation_(5);
 
-  msg.pose_twist.linear.x = twist_deviation_(0);
-  msg.pose_twist.linear.y = twist_deviation_(1);
-  msg.pose_twist.linear.z = twist_deviation_(2);
-  msg.pose_twist.angular.x = twist_deviation_(3);
-  msg.pose_twist.angular.y = twist_deviation_(4);
-  msg.pose_twist.angular.z = twist_deviation_(5);
+  diagnostics_msg_.pose_twist.linear.x = twist_deviation_(0);
+  diagnostics_msg_.pose_twist.linear.y = twist_deviation_(1);
+  diagnostics_msg_.pose_twist.linear.z = twist_deviation_(2);
+  diagnostics_msg_.pose_twist.angular.x = twist_deviation_(3);
+  diagnostics_msg_.pose_twist.angular.y = twist_deviation_(4);
+  diagnostics_msg_.pose_twist.angular.z = twist_deviation_(5);
 
-  msg.pose_accel.linear.x = sensor_wrench_(0);
-  msg.pose_accel.linear.y = sensor_wrench_(1);
-  msg.pose_accel.linear.z = sensor_wrench_(2);
-  msg.pose_accel.angular.x = sensor_wrench_(3);
-  msg.pose_accel.angular.y = sensor_wrench_(4);
-  msg.pose_accel.angular.z = sensor_wrench_(5);
+  /**
+   * TODO(n-DoF passivity)
+   * ddx = jacobian_ * robot_data_->ddq + jacobian_derivative_ * robot_velocities_
+   */
 
-  zspace_publisher_->publish(msg);
+  /**
+   * TODO([y.u]_z)
+   * if inertia_shaping
+   *  twist_deviation_.transpose() * (sensor_wrench_ - desired_inertia_ * desired_pose_accel_)
+   * else
+   *  twist_deviation_.transpose() * (sensor_wrench_ - robot_data_->osim * desired_pose_accel_)
+   */
+
+  diagnostics_msg_.pose_accel.linear.x = robot_velocities_.transpose() * effort_commands_;
+  diagnostics_msg_.pose_accel.linear.y = robot_velocities_.transpose() * robot_efforts_;
+  diagnostics_msg_.pose_accel.linear.z = robot_data_->mechanical_energy;  // K + U
+  diagnostics_msg_.pose_accel.angular.x = robot_accelerations_(0);
+  diagnostics_msg_.pose_accel.angular.y = robot_accelerations_(1);
+  diagnostics_msg_.pose_accel.angular.z = robot_accelerations_(2);
+
+  zspace_publisher_->publish(diagnostics_msg_);
 }
 
 void ImpedanceController::robot_description_param_cb(
   std::shared_future<std::vector<rclcpp::Parameter>> future)
 {
   robot_urdf_ = future.get().at(0).as_string();
-}
-
-void ImpedanceController::declare_parameters()
-{
-  param_listener_ = std::make_shared<ParamListener>(get_node());
 }
 
 controller_interface::CallbackReturn ImpedanceController::read_parameters()
@@ -443,32 +479,40 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     return controller_interface::CallbackReturn::ERROR;
   }
 
-  taskspace_stiffness_ = Vector6d(params_.stiffness.data()).asDiagonal();
-  // Default task space generalized inertia matrix diagonal, with the robot mass.
-  Vector6d ts_inertia_diag(21.167, 21.167, 21.167, 1.529, 1.529, 1.529);
+  desired_stiffness_ = Vector6d(params_.stiffness.data()).asDiagonal();
+  Vector6d inertia_diagonal = kDefaultInertia;
 
   if (std::fpclassify(params_.taskspace_mass) == FP_ZERO)
   {
     RCLCPP_INFO(
       get_node()->get_logger(), "Desired Cartesian mass is 0.0. Inertia shaping disabled.");
-    taskspace_damping_.diagonal() = Vector6d(params_.damping.data());
+
+    if (!params_.damping.empty())
+    {
+      desired_damping_.diagonal() = Vector6d(params_.damping.data());
+    }
+    else
+    {
+      desired_damping_.diagonal() =
+        2 * (inertia_diagonal.array() * desired_stiffness_.diagonal().array()).abs().sqrt();
+    }
     inertia_shaping_ = false;
   }
   else
   {
     const double mass = params_.taskspace_mass;
     const double I = 0.4 * mass * (0.425 * 0.425);  // sphere moment of inertia
-    ts_inertia_diag << mass, mass, mass, I, I, I;
-    taskspace_inertia_inv_ = ts_inertia_diag.cwiseInverse().asDiagonal();
+    inertia_diagonal << mass, mass, mass, I, I, I;
+    desired_inertia_inv_ = inertia_diagonal.cwiseInverse().asDiagonal();
     // Critically damped: D = 2 * sqrt(K * M)
-    taskspace_damping_.diagonal() =
-      2 * (ts_inertia_diag.array() * taskspace_stiffness_.diagonal().array()).abs().sqrt();
+    desired_damping_.diagonal() =
+      2 * (inertia_diagonal.array() * desired_stiffness_.diagonal().array()).abs().sqrt();
     inertia_shaping_ = true;
   }
 
   RCLCPP_INFO_STREAM(
     get_node()->get_logger(), "Damping matrix diagonal: \n"
-                                << taskspace_damping_.diagonal());
+                                << desired_damping_.diagonal());
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
