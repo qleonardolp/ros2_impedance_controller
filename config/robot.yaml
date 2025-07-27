@@ -1,0 +1,10 @@
+# Robot configuration
+
+# joints initial positions
+initial:
+  shoulder_pan: -3.141592 # 1.189
+  shoulder_lift: -0.7854  # -1.80
+  elbow: -2.000   # 1.409
+  wrist_1: -0.357 # 0.373
+  wrist_2: 1.5708 # 1.189
+  wrist_3: 0.0
