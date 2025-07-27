@@ -94,9 +94,9 @@ protected:
    * @brief Update the robot data while running the controller.
    * State interfaces are fetch and the Forward Kinematics is computed.
    */
-  bool update_robot(const rclcpp::Time & t, const rclcpp::Duration & dt);
+  bool update_robot(const rclcpp::Time & clock, const rclcpp::Duration & dt);
 
-  rclcpp::Time clock_time_;
+  rclcpp::Time clock_time_last_;
 
   /**
    * @brief Update the end-effector pose and twist deviations (errors).
@@ -114,6 +114,18 @@ protected:
    * KinematicPose message and publish it.
    */
   void publish_impedance_space();
+
+  /**
+   * @brief Port-Hamiltonian diagnostics. The diagnostics publication contains:
+   * 1. Joint space control power;
+   * 2. Joint space total power;
+   * 3. Impedance Hamiltonian;
+   * 4. Interaction power;
+   * 5. Impedance Hamiltonian I/O power;
+   * 6. n-DoF passivity assertion
+   *    (1: passive, 0: not passive).
+   */
+  void ph_diagnostics();
 
   ReferenceType diagnostics_msg_;
 
@@ -153,6 +165,8 @@ private:
   DiagonalMatrix6d desired_damping_;
   // Inverse of the desired inertia
   DiagonalMatrix6d desired_inertia_inv_;
+  // Desired inertia
+  Matrix6d desired_inertia_;
   // Desired impedance wrench [forces, torques].T
   Vector6d impedance_wrench_;
   // Interaction wrench [forces, torques].T
@@ -167,6 +181,7 @@ private:
   // update_deviations variables (task space)
   ReferenceType desired_kpose_;
   Vector6d actual_twist_;
+  Vector6d actual_accel_;
   Vector6d desired_twist_;
   Eigen::Vector3d desired_position_;
   Eigen::Quaterniond desired_quaternion_;
@@ -205,8 +220,6 @@ private:
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr reference_marker_publisher_;
 
   visualization_msgs::msg::Marker marker_;
-
-  uint16_t marker_downsample_{0};
 };
 
 }  // namespace ros2_impedance_controller
