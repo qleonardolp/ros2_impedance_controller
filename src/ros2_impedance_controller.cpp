@@ -357,6 +357,7 @@ bool ImpedanceController::configure_robot_model()
 
 bool ImpedanceController::update_robot(const rclcpp::Time & clock, const rclcpp::Duration & /*dt*/)
 {
+  // clock_time_last_ updates from *time* in the end of ::update(time, period)
   double ellapsed_time = static_cast<double>((clock - clock_time_last_).nanoseconds()) * 1E-9;
   for (uint8_t k = 0; k < degrees_of_freedom_; k++)
   {
@@ -478,6 +479,7 @@ void ImpedanceController::ph_diagnostics()
     (sensor_wrench_ - desired_dmom).norm() >
     (desired_dmom - desired_inertia_ * actual_accel_ + desired_stiffness_ * pose_deviation_).norm();
 
+  // TODO(@me): integrate impedance_power to compute integral passivity
   impedance_power = twist_deviation_.transpose() * (sensor_wrench_ - desired_dmom);
   impd_k_energy = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
   impd_u_energy = pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
@@ -529,6 +531,7 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     }
     else
     {
+      // TODO(@me): this is not working properly (over-overdamped). Leave it behind for a while.
       desired_damping_.diagonal() =
         2 * (inertia_diagonal.array() * desired_stiffness_.diagonal().array()).abs().sqrt();
     }
