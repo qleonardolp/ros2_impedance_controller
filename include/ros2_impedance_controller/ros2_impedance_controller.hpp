@@ -94,9 +94,7 @@ protected:
    * @brief Update the robot data while running the controller.
    * State interfaces are fetch and the Forward Kinematics is computed.
    */
-  bool update_robot(const rclcpp::Time & clock, const rclcpp::Duration & dt);
-
-  rclcpp::Time clock_time_last_;
+  bool update_robot();
 
   /**
    * @brief Update the end-effector pose and twist deviations (errors).
@@ -119,15 +117,25 @@ protected:
    * @brief Port-Hamiltonian diagnostics. The diagnostics publication contains:
    * 1. Joint space control power;
    * 2. Joint space total power;
-   * 3. Impedance Hamiltonian;
-   * 4. Interaction power;
-   * 5. Impedance Hamiltonian I/O power;
+   * 3. Interaction power;
+   * 4. Impedance Hamiltonian;
+   * 5. Impedance Hamiltonian I/O power integrated;
    * 6. n-DoF passivity assertion
    *    (1: passive, 0: not passive).
    */
   void ph_diagnostics();
 
   ReferenceType diagnostics_msg_;
+
+  /**
+   * @brief Compute impedance port I/O energy, to evaluate passivity.
+   */
+  void compute_inout_energy();
+
+  /**
+   * @brief Compute Cartesian impedance Hamiltonian function
+   */
+  void compute_hamiltonian();
 
   controller_interface::CallbackReturn read_parameters();
 
@@ -154,6 +162,17 @@ private:
   std::string base_link_;
   std::string interaction_link_;
   size_t degrees_of_freedom_{1};
+
+  rclcpp::Time clock_time_last_;
+  double ellapsed_time_{0};
+
+  /* Port-Hamiltonian variables */
+  // impedance port I/O energy
+  double impedance_ioenergy_{0};
+  // Impedance power past value
+  double impedance_power_last_{0};
+  // Impedance Hamiltonian function value
+  double impedance_hamiltonian_{0};
 
   pinocchio::Model robot_model_;
   pinocchio::FrameIndex end_effector_frame_;

@@ -169,6 +169,9 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
     return ret;
   }
 
+  impedance_ioenergy_ = 0;
+  impedance_power_last_ = 0;
+
   // Dynamic size members (joint space dim)
   jacobian_.setZero();
   jacobian_derivative_.setZero();
@@ -253,10 +256,11 @@ controller_interface::CallbackReturn ImpedanceController::on_deactivate(
 }
 
 controller_interface::return_type ImpedanceController::update(
-  const rclcpp::Time & time, const rclcpp::Duration & period)
+  const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
 {
+  ellapsed_time_ = static_cast<double>((time - clock_time_last_).nanoseconds()) * 1E-9;
   // Read state interfaces and update robot
-  if (!update_robot(time, period))
+  if (!update_robot())
   {
     RCLCPP_ERROR(get_node()->get_logger(), "Failed to update robot model with state data");
     return controller_interface::return_type::ERROR;
@@ -311,6 +315,15 @@ controller_interface::return_type ImpedanceController::update(
     }
   }
 
+  if (!inertia_shaping_)
+  {
+    // Operational (task) space inertia matrix
+    desired_inertia_.noalias() =
+      jacobian_.transpose().completeOrthogonalDecomposition().pseudoInverse() * jsim_jpinv_;
+  }
+  compute_inout_energy();  // needs desired_inertia_ updated
+  compute_hamiltonian();
+
   static uint8_t sample_diagnostics = 0;
   if (0 == sample_diagnostics % 4)  // downsampling the publisher 4x
   {
@@ -355,10 +368,8 @@ bool ImpedanceController::configure_robot_model()
   return true;
 }
 
-bool ImpedanceController::update_robot(const rclcpp::Time & clock, const rclcpp::Duration & /*dt*/)
+bool ImpedanceController::update_robot()
 {
-  // clock_time_last_ updates from *time* in the end of ::update(time, period)
-  double ellapsed_time = static_cast<double>((clock - clock_time_last_).nanoseconds()) * 1E-9;
   for (uint8_t k = 0; k < degrees_of_freedom_; k++)
   {
     std::optional position = position_interfaces_[k]->get_optional();
@@ -375,7 +386,7 @@ bool ImpedanceController::update_robot(const rclcpp::Time & clock, const rclcpp:
     robot_efforts_(k) = effort.value();
 
     // Finite difference
-    robot_accelerations_(k) = (robot_velocities_(k) - robot_velocities_last_(k)) / ellapsed_time;
+    robot_accelerations_(k) = (robot_velocities_(k) - robot_velocities_last_(k)) / ellapsed_time_;
     robot_velocities_last_(k) = robot_velocities_(k);
   }
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_positions_, robot_velocities_);
@@ -459,45 +470,39 @@ void ImpedanceController::publish_impedance_space()
 
 void ImpedanceController::ph_diagnostics()
 {
-  static Vector6d desired_dmom = Vector6d::Zero();  // desired momenta derivative
-  static double impedance_power = 0;                // [y.u]_z
-  static double impd_k_energy = 0;
-  static double impd_u_energy = 0;
   static bool is_passive = true;
-
-  if (!inertia_shaping_)
-  {
-    // Operational (task) space inertia matrix
-    desired_inertia_.noalias() =
-      jacobian_.transpose().completeOrthogonalDecomposition().pseudoInverse() * jsim_jpinv_;
-  }
-
-  desired_dmom = desired_inertia_ * desired_pose_accel_;
-  // N-DoF Passivity (not working)
-  actual_accel_ = jacobian_ * robot_accelerations_ + jacobian_derivative_ * robot_velocities_;
-  is_passive =
-    (sensor_wrench_ - desired_dmom).norm() >
-    (desired_dmom - desired_inertia_ * actual_accel_ + desired_stiffness_ * pose_deviation_).norm();
-
-  // TODO(@me): integrate impedance_power to compute integral passivity
-  impedance_power = twist_deviation_.transpose() * (sensor_wrench_ - desired_dmom);
-  impd_k_energy = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
-  impd_u_energy = pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
+  is_passive = impedance_ioenergy_ > impedance_hamiltonian_;
 
   // JS control power
   diagnostics_msg_.pose_twist.linear.x = robot_velocities_.transpose() * effort_commands_;
   // JS total power
   diagnostics_msg_.pose_twist.linear.y = robot_velocities_.transpose() * robot_efforts_;
-  // Impedance Hamiltonian
-  diagnostics_msg_.pose_twist.linear.z = (impd_k_energy + impd_u_energy) * 0.50;
   // Interaction power
-  diagnostics_msg_.pose_twist.angular.x = actual_twist_.transpose() * sensor_wrench_;
-  // Impedance Hamiltonian I/O power
-  diagnostics_msg_.pose_twist.angular.y = impedance_power;
+  diagnostics_msg_.pose_twist.linear.z = actual_twist_.transpose() * sensor_wrench_;
+  // Impedance Hamiltonian
+  diagnostics_msg_.pose_twist.angular.x = impedance_hamiltonian_;
+  // Impedance Hamiltonian I/O energy
+  diagnostics_msg_.pose_twist.angular.y = impedance_ioenergy_;
   // N-DoF Passivity
   diagnostics_msg_.pose_twist.angular.z = is_passive;
 
   zspace_publisher_->publish(diagnostics_msg_);
+}
+
+void ImpedanceController::compute_inout_energy()
+{
+  static double power = 0;  // [y.u]_z
+  power = twist_deviation_.transpose() * (sensor_wrench_ - desired_inertia_ * desired_pose_accel_);
+  // Trapezoidal integration
+  impedance_ioenergy_ += (power + impedance_power_last_) * ellapsed_time_ * 0.5;
+  impedance_power_last_ = power;
+}
+
+void ImpedanceController::compute_hamiltonian()
+{
+  impedance_hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
+  impedance_hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
+  impedance_hamiltonian_ = 0.5 * impedance_hamiltonian_;
 }
 
 void ImpedanceController::robot_description_param_cb(
