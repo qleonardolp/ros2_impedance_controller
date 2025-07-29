@@ -86,6 +86,8 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
   qos_lowlatency.liveliness(RMW_QOS_POLICY_LIVELINESS_AUTOMATIC);
 
   zspace_publisher_ = get_node()->create_publisher<ReferenceType>("~/zspace", qos_lowlatency);
+  realtime_publisher_ =
+    std::make_shared<realtime_tools::RealtimePublisher<ReferenceType>>(zspace_publisher_);
 
   if (params_.visualize_reference)
   {
@@ -153,6 +155,7 @@ controller_interface::CallbackReturn ImpedanceController::on_cleanup(
   reference_subscriber_.reset();
   interaction_subscriber_.reset();
   reference_marker_publisher_.reset();
+  realtime_publisher_.reset();
   zspace_publisher_.reset();
 
   return controller_interface::CallbackReturn::SUCCESS;
@@ -465,7 +468,7 @@ void ImpedanceController::publish_impedance_space()
   diagnostics_msg_.pose_accel.angular.y = sensor_wrench_(4);
   diagnostics_msg_.pose_accel.angular.z = sensor_wrench_(5);
 
-  zspace_publisher_->publish(diagnostics_msg_);
+  realtime_publisher_->try_publish(diagnostics_msg_);
 }
 
 void ImpedanceController::ph_diagnostics()
@@ -486,7 +489,7 @@ void ImpedanceController::ph_diagnostics()
   // N-DoF Passivity
   diagnostics_msg_.pose_twist.angular.z = is_passive;
 
-  zspace_publisher_->publish(diagnostics_msg_);
+  realtime_publisher_->try_publish(diagnostics_msg_);
 }
 
 void ImpedanceController::compute_inout_energy()
