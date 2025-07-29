@@ -536,9 +536,9 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     }
     else
     {
-      // TODO(@me): this is not working properly (over-overdamped). Leave it behind for a while.
       desired_damping_.diagonal() =
-        2 * (inertia_diagonal.array() * desired_stiffness_.diagonal().array()).abs().sqrt();
+        2 * kDampingRatio *
+        (inertia_diagonal.array() * desired_stiffness_.diagonal().array()).abs().sqrt();
     }
     inertia_shaping_ = false;
   }
