@@ -236,12 +236,12 @@ private:
 
   // Deviation, deviation derivative and interaction wrench publisher (for impedance space)
   // Interaction wrench goes on the accel field, replacing accelerations by forces and torques.
-  rclcpp::Publisher<ReferenceType>::SharedPtr zspace_publisher_;
-  std::shared_ptr<realtime_tools::RealtimePublisher<ReferenceType>> realtime_publisher_;
+  rclcpp::Publisher<ReferenceType>::SharedPtr status_publisher_;
+  std::unique_ptr<realtime_tools::RealtimePublisher<ReferenceType>> realtime_publisher_;
   ReferenceType diagnostics_msg_;
 
   // Publisher for reference visualization
-  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr reference_marker_publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
 
   visualization_msgs::msg::Marker marker_;
 };

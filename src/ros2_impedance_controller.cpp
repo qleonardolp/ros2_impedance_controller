@@ -85,14 +85,14 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
   qos_lowlatency.best_effort().durability_volatile();
   qos_lowlatency.liveliness(RMW_QOS_POLICY_LIVELINESS_AUTOMATIC);
 
-  zspace_publisher_ = get_node()->create_publisher<ReferenceType>("~/zspace", qos_lowlatency);
+  status_publisher_ = get_node()->create_publisher<ReferenceType>("~/status", qos_lowlatency);
   realtime_publisher_ =
-    std::make_shared<realtime_tools::RealtimePublisher<ReferenceType>>(zspace_publisher_);
+    std::make_unique<realtime_tools::RealtimePublisher<ReferenceType>>(status_publisher_);
 
   if (params_.visualize_reference)
   {
     configure_visualization_marker();
-    reference_marker_publisher_ = get_node()->create_publisher<visualization_msgs::msg::Marker>(
+    marker_publisher_ = get_node()->create_publisher<visualization_msgs::msg::Marker>(
       "~/reference_marker", rclcpp::SystemDefaultsQoS());
   }
 
@@ -108,7 +108,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
         if (0 == downsample % 5)
         {
           marker_.pose = msg.get()->pose;
-          reference_marker_publisher_->publish(marker_);
+          marker_publisher_->publish(marker_);
           downsample = 0;
         }
       }
@@ -125,7 +125,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
         Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
       sensor_wrench_raw.tail<3>() =
         Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
-      const double lpf_alpha = 0.556862724;  // Low-pass filter, 200 Hz cutoff frequency
+      const double lpf_alpha = 0.75855;  // LPF: cutoff 50, dt 0.01
       sensor_wrench_ = lpf_alpha * sensor_wrench_raw + (1 - lpf_alpha) * sensor_wrench_;
     });
 
@@ -154,9 +154,9 @@ controller_interface::CallbackReturn ImpedanceController::on_cleanup(
   rt_reference_ptr_.reset();
   reference_subscriber_.reset();
   interaction_subscriber_.reset();
-  reference_marker_publisher_.reset();
+  marker_publisher_.reset();
   realtime_publisher_.reset();
-  zspace_publisher_.reset();
+  status_publisher_.reset();
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -253,6 +253,8 @@ controller_interface::CallbackReturn ImpedanceController::on_deactivate(
   position_interfaces_.clear();
   velocity_interfaces_.clear();
   effort_interfaces_.clear();
+
+  diagnostics_msg_ = ReferenceType();
 
   rt_reference_ptr_ = realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>>(nullptr);
   return controller_interface::CallbackReturn::SUCCESS;
@@ -476,9 +478,9 @@ void ImpedanceController::ph_diagnostics()
   static bool is_passive = true;
   is_passive = impedance_ioenergy_ > impedance_hamiltonian_;
 
-  // JS control power
+  // JS control power: dq^T * tau_act
   diagnostics_msg_.pose_twist.linear.x = robot_velocities_.transpose() * effort_commands_;
-  // JS total power
+  // JS total power: dq^T * tau
   diagnostics_msg_.pose_twist.linear.y = robot_velocities_.transpose() * robot_efforts_;
   // Interaction power
   diagnostics_msg_.pose_twist.linear.z = actual_twist_.transpose() * sensor_wrench_;
@@ -517,7 +519,6 @@ void ImpedanceController::robot_description_param_cb(
 controller_interface::CallbackReturn ImpedanceController::read_parameters()
 {
   params_ = param_listener_->get_params();
-  degrees_of_freedom_ = params_.degrees_of_freedom;
 
   if (params_.joints.empty())
   {
@@ -525,6 +526,7 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     return controller_interface::CallbackReturn::ERROR;
   }
 
+  degrees_of_freedom_ = params_.joints.size();
   desired_stiffness_ = Vector6d(params_.stiffness.data()).asDiagonal();
   Vector6d inertia_diagonal = kDefaultInertia;
 

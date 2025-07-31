@@ -33,7 +33,6 @@ impedance_controller:
     stiffness: [1000.0, 1000.0, 1000.0, 300.0, 300.0, 300.0]
 #    damping: [83.0, 83.0, 83.0, 1.7, 1.7, 1.7]
     taskspace_mass: 0.0 # 10.58345
-    degrees_of_freedom: 6
     visualize_reference: false
 
 forward_effort_controller:
