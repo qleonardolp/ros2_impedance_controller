@@ -44,6 +44,10 @@ typedef Eigen::Matrix<
   Matrix6Xd;
 typedef Eigen::Matrix<double, Eigen::Dynamic, 1, 0, kMaxJointSpaceDim, 1> VectorXd;
 
+const double kTorqueCutoff = 50.0;
+const double kTorqueAlpha =
+  (2 * M_PI * 0.002 * kTorqueCutoff) / (2 * M_PI * 0.002 * kTorqueCutoff + 1);
+
 // Default task space generalized inertia matrix diagonal, with the robot mass.
 const Vector6d kDefaultInertia(18.40, 18.40, 18.40, 1.2744, 1.2744, 1.2744);
 
@@ -217,6 +221,7 @@ private:
 
   // Controller effort command vector (joint space)
   VectorXd effort_commands_;
+  VectorXd commands_filtered_;
   // Command terms
   VectorXd twist_compensation_;
   VectorXd accel_feedforward_;

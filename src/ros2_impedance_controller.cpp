@@ -136,6 +136,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
   robot_accelerations_.resize(degrees_of_freedom_);
   robot_efforts_.resize(degrees_of_freedom_);
   effort_commands_.resize(degrees_of_freedom_);
+  commands_filtered_.resize(degrees_of_freedom_);
   twist_compensation_.resize(degrees_of_freedom_);
   accel_feedforward_.resize(degrees_of_freedom_);
   impedance_torques_.resize(degrees_of_freedom_);
@@ -179,6 +180,7 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   jacobian_.setZero();
   jacobian_derivative_.setZero();
   effort_commands_.setZero();
+  commands_filtered_.setZero();
   twist_compensation_.setZero();
   accel_feedforward_.setZero();
   impedance_torques_.setZero();
@@ -311,9 +313,11 @@ controller_interface::return_type ImpedanceController::update(
 
   effort_commands_ = accel_feedforward_ + impedance_torques_ + twist_compensation_ + robot_data_->g;
 
+  commands_filtered_ = kTorqueAlpha * effort_commands_ + (1.0 - kTorqueAlpha) * commands_filtered_;
+
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
-    if (!effort_command_interfaces_[k]->set_value(effort_commands_(k)))
+    if (!effort_command_interfaces_[k]->set_value(commands_filtered_(k)))
     {
       RCLCPP_ERROR(get_node()->get_logger(), "Failed to set command interface value");
       return controller_interface::return_type::ERROR;
@@ -479,7 +483,7 @@ void ImpedanceController::ph_diagnostics()
   is_passive = impedance_ioenergy_ > impedance_hamiltonian_;
 
   // JS control power: dq^T * tau_act
-  diagnostics_msg_.pose_twist.linear.x = robot_velocities_.transpose() * effort_commands_;
+  diagnostics_msg_.pose_twist.linear.x = robot_velocities_.transpose() * commands_filtered_;
   // JS total power: dq^T * tau
   diagnostics_msg_.pose_twist.linear.y = robot_velocities_.transpose() * robot_efforts_;
   // Interaction power
