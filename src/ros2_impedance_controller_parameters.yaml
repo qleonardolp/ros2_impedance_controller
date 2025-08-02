@@ -36,9 +36,20 @@ ros2_impedance_controller:
     since the translational part of the generalized inertia matrix must be the same.
     The inertia tensor (rotational part) is of a solid sphere with this mass, and
     radius 0.5 m.",
+    validation: {
+      gt_eq<>: [0.0]
+    }
+  }
+  torque_cutoff: {
+    type: double,
+    default_value: 25.0,
+    description: "Low-pass filter cutoff frequency [Hz] of the commanded efforts (torques)",
+    validation: {
+      gt_eq<>: [0.0]
+    }
   }
   visualize_reference: {
     type: bool,
-    default_value: true,
+    default_value: false,
     read_only: true,
   }

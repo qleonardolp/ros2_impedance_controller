@@ -1,6 +1,6 @@
 controller_manager:
   ros__parameters:
-    update_rate: 500  # Hz
+    update_rate: 1000  # Hz
     thread_priority: 98  # Range: 0-99. Default is 50
 
     joint_state_broadcaster:
@@ -31,9 +31,9 @@ impedance_controller:
     interaction_link: ee_link
     ft_sensor_topic: end_effector_ft_sensor
     stiffness: [1000.0, 1000.0, 1000.0, 300.0, 300.0, 300.0]
-#    damping: [83.0, 83.0, 83.0, 1.7, 1.7, 1.7]
+    damping: [50.0, 50.0, 50.0, 48.80, 39.98, 142.7]
     taskspace_mass: 0.0 # 10.58345
-    visualize_reference: false
+    torque_cutoff: 20.0
 
 forward_effort_controller:
   ros__parameters:

@@ -44,15 +44,11 @@ typedef Eigen::Matrix<
   Matrix6Xd;
 typedef Eigen::Matrix<double, Eigen::Dynamic, 1, 0, kMaxJointSpaceDim, 1> VectorXd;
 
-const double kTorqueCutoff = 50.0;
-const double kTorqueAlpha =
-  (2 * M_PI * 0.002 * kTorqueCutoff) / (2 * M_PI * 0.002 * kTorqueCutoff + 1);
-
-// Default task space generalized inertia matrix diagonal, with the robot mass.
-const Vector6d kDefaultInertia(18.40, 18.40, 18.40, 1.2744, 1.2744, 1.2744);
+// Task space generalized inertia matrix eigenvalues
+const Vector6d kDefaultInertia(0.000220625, 0.00256287, 0.00588485, 3.82715, 10.2802, 131.032);
 
 // Default damping ratio when no damping and inertia are set
-const double kDampingRatio = 0.36;
+const double kDampingRatio = 0.50;
 
 /**
  * \brief Cartesian impedance controller for articulated robots.
@@ -144,6 +140,16 @@ protected:
    */
   void compute_hamiltonian();
 
+  /**
+   * @brief Commands Low-pass filter alpha
+   */
+  double command_alpha(const double period);
+
+  /**
+   * @brief Read simple parameters, as such link (frame) names and
+   * number of joints. It also compute the inertia and damping according
+   * to `taskspace_mass` and the `damping` vector if empty.
+   */
   controller_interface::CallbackReturn read_parameters();
 
   std::shared_ptr<ParamListener> param_listener_;
@@ -164,7 +170,7 @@ private:
 
   bool has_effort_states_{true};
   bool inertia_shaping_{false};
-  bool debug_visualizer_{true};
+  bool debug_logger_{true};
 
   std::string base_link_;
   std::string interaction_link_;
@@ -184,6 +190,10 @@ private:
   pinocchio::Model robot_model_;
   pinocchio::FrameIndex end_effector_frame_;
   std::shared_ptr<pinocchio::Data> robot_data_;
+
+  Eigen::JacobiSVD<
+    Eigen::MatrixXd, Eigen::NoQRPreconditioner | Eigen::ComputeThinU | Eigen::ComputeFullV>
+    LambdaSVD_;
 
   // Desired stiffness
   DiagonalMatrix6d desired_stiffness_;
