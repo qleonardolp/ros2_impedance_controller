@@ -119,14 +119,13 @@ protected:
   void publish_impedance_space();
 
   /**
-   * @brief Port-Hamiltonian diagnostics. The diagnostics publication contains:
+   * @brief Port-Hamiltonian diagnostics with:
    * 1. Joint space control power;
-   * 2. Joint space total power;
+   * 2. Joint space total minus control power;
    * 3. Interaction power;
    * 4. Impedance Hamiltonian;
-   * 5. Impedance Hamiltonian I/O power integrated;
-   * 6. n-DoF passivity assertion
-   *    (1: passive, 0: not passive).
+   * 5. Impedance Hamiltonian I/O power;
+   * 6. Model-based interaction power.
    */
   void ph_diagnostics();
 
@@ -180,12 +179,14 @@ private:
   double ellapsed_time_{0};
 
   /* Port-Hamiltonian variables */
-  // impedance port I/O energy
-  double impedance_ioenergy_{0};
-  // Impedance power past value
-  double impedance_power_last_{0};
+  // Impedance power
+  double impedance_power_{0};
   // Impedance Hamiltonian function value
   double impedance_hamiltonian_{0};
+  // Expected interaction power
+  double expected_fint_power_{0};
+  // Expected impedance input (u)
+  Vector6d impedance_expected_input_;
 
   pinocchio::Model robot_model_;
   pinocchio::FrameIndex end_effector_frame_;

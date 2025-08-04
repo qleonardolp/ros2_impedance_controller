@@ -30,9 +30,11 @@ impedance_controller:
     base_link: base_link
     interaction_link: ee_link
     ft_sensor_topic: end_effector_ft_sensor
-    stiffness: [1000.0, 1000.0, 1000.0, 300.0, 300.0, 300.0]
-    damping: [50.0, 50.0, 50.0, 48.80, 39.98, 142.7]
-    taskspace_mass: 0.0 # 10.58345
+    # stiffness: [1000.0, 1000.0, 1000.0, 300.0, 300.0, 300.0]
+    # taskspace_mass: 10.5835
+    stiffness: [196.0, 196.0, 196.0, 18.0, 18.0, 18.0]
+    damping: [28.0, 28.0, 28.0, 8.48, 8.48, 8.48]
+    taskspace_mass: 0.0
     torque_cutoff: 20.0
 
 forward_effort_controller:

@@ -173,9 +173,6 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
     return ret;
   }
 
-  impedance_ioenergy_ = 0;
-  impedance_power_last_ = 0;
-
   // Dynamic size members (joint space dim)
   jacobian_.setZero();
   jacobian_derivative_.setZero();
@@ -203,6 +200,9 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   desired_twist_.setZero();
   actual_twist_.setZero();
   actual_accel_.setZero();
+
+  // PH related
+  impedance_expected_input_.setZero();
 
   for (const auto & interface : state_interfaces_)  // LoanedStateInterface from the base class
   {
@@ -487,32 +487,34 @@ void ImpedanceController::publish_impedance_space()
 
 void ImpedanceController::ph_diagnostics()
 {
-  static bool is_passive = true;
-  is_passive = impedance_ioenergy_ > impedance_hamiltonian_;
-
-  // JS control power: dq^T * tau_act
+  // Commands input power
   diagnostics_msg_.pose_twist.linear.x = robot_velocities_.transpose() * commands_filtered_;
-  // JS total power: dq^T * tau
-  diagnostics_msg_.pose_twist.linear.y = robot_velocities_.transpose() * robot_efforts_;
-  // Interaction power
+  // dq^T * (tau - tau_act)
+  diagnostics_msg_.pose_twist.linear.y =
+    robot_velocities_.transpose() * (robot_efforts_ - commands_filtered_);
+  // Interaction power using F/T Sensor (ground truth)
   diagnostics_msg_.pose_twist.linear.z = actual_twist_.transpose() * sensor_wrench_;
   // Impedance Hamiltonian
   diagnostics_msg_.pose_twist.angular.x = impedance_hamiltonian_;
-  // Impedance Hamiltonian I/O energy
-  diagnostics_msg_.pose_twist.angular.y = impedance_ioenergy_;
-  // N-DoF Passivity
-  diagnostics_msg_.pose_twist.angular.z = is_passive;
+  // Impedance I/O power
+  diagnostics_msg_.pose_twist.angular.y = impedance_power_;
+  // Expected interaction power from the impedance model
+  diagnostics_msg_.pose_twist.angular.z = expected_fint_power_;
 
   realtime_publisher_->try_publish(diagnostics_msg_);
 }
 
 void ImpedanceController::compute_inout_energy()
 {
-  static double power = 0;  // [y.u]_z
-  power = twist_deviation_.transpose() * (sensor_wrench_ - desired_inertia_ * desired_pose_accel_);
-  // Trapezoidal integration
-  impedance_ioenergy_ += (power + impedance_power_last_) * ellapsed_time_ * 0.5;
-  impedance_power_last_ = power;
+  actual_accel_.noalias() =
+    jacobian_ * robot_accelerations_ + jacobian_derivative_ * robot_velocities_;
+
+  impedance_expected_input_.noalias() = desired_inertia_ * actual_accel_ + impedance_wrench_;
+
+  expected_fint_power_ = actual_twist_.transpose() *
+                         (impedance_expected_input_ - desired_inertia_ * desired_pose_accel_);
+
+  impedance_power_ = twist_deviation_.transpose() * impedance_expected_input_;
 }
 
 void ImpedanceController::compute_hamiltonian()
