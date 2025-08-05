@@ -28,7 +28,7 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "gz_gui",
-            default_value="false",
+            default_value="true",
             description="Start Gazebo GUI. The default behavior"
             + " starts gazebo in server mode using Rviz2 as graphical interface.",
         )
@@ -48,6 +48,13 @@ def generate_launch_description():
             + " 'forward_effort_controller' instead of the impedance controller.",
         )
     )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "world",
+            default_value="mobile",
+            description="Gazebo world. See worlds directory.",
+        )
+    )
 
     # Arguments variables
     gz_gui = LaunchConfiguration("gz_gui")
@@ -55,7 +62,9 @@ def generate_launch_description():
     controller_name = LaunchConfiguration("controller_name")
 
     package_share = FindPackageShare("ros2_impedance_controller")
-    gazebo_world = PathJoinSubstitution([package_share, "worlds", "benchmark.sdf"])
+    gazebo_world = PathJoinSubstitution(
+        [package_share, "worlds", [LaunchConfiguration("world"), ".sdf"]]
+    )
     bridges = PathJoinSubstitution([package_share, "config", "ros_gz_bridge.yaml"])
     controllers = PathJoinSubstitution([package_share, "config", "controllers.yaml"])
     rviz_config = PathJoinSubstitution([package_share, "config", "rviz2.rviz"])

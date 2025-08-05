@@ -203,6 +203,8 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
 
   // PH related
   impedance_expected_input_.setZero();
+  hamiltonian_filtered_ = 0.0;
+  hamiltonian_last_ = 0.0;
 
   for (const auto & interface : state_interfaces_)  // LoanedStateInterface from the base class
   {
@@ -256,7 +258,7 @@ controller_interface::CallbackReturn ImpedanceController::on_deactivate(
   velocity_interfaces_.clear();
   effort_interfaces_.clear();
 
-  diagnostics_msg_ = ReferenceType();
+  realtime_publisher_->stop();
 
   rt_reference_ptr_ = realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>>(nullptr);
   return controller_interface::CallbackReturn::SUCCESS;
@@ -329,7 +331,7 @@ controller_interface::return_type ImpedanceController::update(
     }
   }
 
-  compute_inout_energy();  // needs desired_inertia_ updated
+  compute_inout_power();  // needs desired_inertia_ updated
   compute_hamiltonian();
 
   if (debug_logger_)
@@ -341,15 +343,7 @@ controller_interface::return_type ImpedanceController::update(
     debug_logger_ = false;
   }
 
-  static uint8_t sample_diagnostics = 0;
-  if (0 == sample_diagnostics % 4)  // downsampling the publisher 4x
-  {
-    // publish_impedance_space();
-    ph_diagnostics();
-    sample_diagnostics = 0;
-  }
-  ++sample_diagnostics;
-
+  ph_diagnostics();
   clock_time_last_ = time;
   return controller_interface::return_type::OK;
 }
@@ -460,68 +454,74 @@ void ImpedanceController::update_deviations()
 
 void ImpedanceController::publish_impedance_space()
 {
-  diagnostics_msg_.pose.position.x = pose_deviation_(0);
-  diagnostics_msg_.pose.position.y = pose_deviation_(1);
-  diagnostics_msg_.pose.position.z = pose_deviation_(2);
-  // Using the quaternion vector as the angles
-  diagnostics_msg_.pose.orientation.x = pose_deviation_(3);
-  diagnostics_msg_.pose.orientation.y = pose_deviation_(4);
-  diagnostics_msg_.pose.orientation.z = pose_deviation_(5);
+  if (realtime_publisher_->trylock())
+  {
+    realtime_publisher_->msg_.pose.position.x = pose_deviation_(0);
+    realtime_publisher_->msg_.pose.position.y = pose_deviation_(1);
+    realtime_publisher_->msg_.pose.position.z = pose_deviation_(2);
+    // Using the quaternion vector as the angles
+    realtime_publisher_->msg_.pose.orientation.x = pose_deviation_(3);
+    realtime_publisher_->msg_.pose.orientation.y = pose_deviation_(4);
+    realtime_publisher_->msg_.pose.orientation.z = pose_deviation_(5);
 
-  diagnostics_msg_.pose_twist.linear.x = twist_deviation_(0);
-  diagnostics_msg_.pose_twist.linear.y = twist_deviation_(1);
-  diagnostics_msg_.pose_twist.linear.z = twist_deviation_(2);
-  diagnostics_msg_.pose_twist.angular.x = twist_deviation_(3);
-  diagnostics_msg_.pose_twist.angular.y = twist_deviation_(4);
-  diagnostics_msg_.pose_twist.angular.z = twist_deviation_(5);
+    realtime_publisher_->msg_.pose_twist.linear.x = twist_deviation_(0);
+    realtime_publisher_->msg_.pose_twist.linear.y = twist_deviation_(1);
+    realtime_publisher_->msg_.pose_twist.linear.z = twist_deviation_(2);
+    realtime_publisher_->msg_.pose_twist.angular.x = twist_deviation_(3);
+    realtime_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
+    realtime_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
 
-  diagnostics_msg_.pose_accel.linear.x = sensor_wrench_(0);
-  diagnostics_msg_.pose_accel.linear.y = sensor_wrench_(1);
-  diagnostics_msg_.pose_accel.linear.z = sensor_wrench_(2);
-  diagnostics_msg_.pose_accel.angular.x = sensor_wrench_(3);
-  diagnostics_msg_.pose_accel.angular.y = sensor_wrench_(4);
-  diagnostics_msg_.pose_accel.angular.z = sensor_wrench_(5);
+    realtime_publisher_->msg_.pose_accel.linear.x = sensor_wrench_(0);
+    realtime_publisher_->msg_.pose_accel.linear.y = sensor_wrench_(1);
+    realtime_publisher_->msg_.pose_accel.linear.z = sensor_wrench_(2);
+    realtime_publisher_->msg_.pose_accel.angular.x = sensor_wrench_(3);
+    realtime_publisher_->msg_.pose_accel.angular.y = sensor_wrench_(4);
+    realtime_publisher_->msg_.pose_accel.angular.z = sensor_wrench_(5);
 
-  realtime_publisher_->try_publish(diagnostics_msg_);
+    realtime_publisher_->unlockAndPublish();
+  }
 }
 
 void ImpedanceController::ph_diagnostics()
 {
-  // Commands input power
-  diagnostics_msg_.pose_twist.linear.x = robot_velocities_.transpose() * commands_filtered_;
-  // dq^T * (tau - tau_act)
-  diagnostics_msg_.pose_twist.linear.y =
-    robot_velocities_.transpose() * (robot_efforts_ - commands_filtered_);
-  // Interaction power using F/T Sensor (ground truth)
-  diagnostics_msg_.pose_twist.linear.z = actual_twist_.transpose() * sensor_wrench_;
-  // Impedance Hamiltonian
-  diagnostics_msg_.pose_twist.angular.x = impedance_hamiltonian_;
-  // Impedance I/O power
-  diagnostics_msg_.pose_twist.angular.y = impedance_power_;
-  // Expected interaction power from the impedance model
-  diagnostics_msg_.pose_twist.angular.z = expected_fint_power_;
+  if (realtime_publisher_->trylock())
+  {
+    // Robot Hamiltonian
+    realtime_publisher_->msg_.pose_twist.linear.x = robot_data_->mechanical_energy;
+    // Commands input power
+    realtime_publisher_->msg_.pose_twist.linear.y =
+      robot_velocities_.transpose() * commands_filtered_;
+    // Interaction power using F/T Sensor (ground truth)
+    realtime_publisher_->msg_.pose_twist.linear.z = actual_twist_.transpose() * sensor_wrench_;
+    // Impedance Hamiltonian
+    realtime_publisher_->msg_.pose_twist.angular.x = hamiltonian_filtered_;
+    // Impedance Hamiltonian derivative
+    realtime_publisher_->msg_.pose_twist.angular.y = hamiltonian_derivative_;
+    // Impedance I/O power
+    realtime_publisher_->msg_.pose_twist.angular.z = impedance_power_;
 
-  realtime_publisher_->try_publish(diagnostics_msg_);
+    realtime_publisher_->unlockAndPublish();
+  }
 }
 
-void ImpedanceController::compute_inout_energy()
+void ImpedanceController::compute_inout_power()
 {
   actual_accel_.noalias() =
     jacobian_ * robot_accelerations_ + jacobian_derivative_ * robot_velocities_;
 
   impedance_expected_input_.noalias() = desired_inertia_ * actual_accel_ + impedance_wrench_;
-
-  expected_fint_power_ = actual_twist_.transpose() *
-                         (impedance_expected_input_ - desired_inertia_ * desired_pose_accel_);
-
   impedance_power_ = twist_deviation_.transpose() * impedance_expected_input_;
 }
 
 void ImpedanceController::compute_hamiltonian()
 {
-  impedance_hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
-  impedance_hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
-  impedance_hamiltonian_ = 0.5 * impedance_hamiltonian_;
+  hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
+  hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
+  hamiltonian_ = 0.5 * hamiltonian_;
+
+  hamiltonian_filtered_ = 0.05912 * hamiltonian_ + (1.0 - 0.05912) * hamiltonian_filtered_;
+  hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / ellapsed_time_;
+  hamiltonian_last_ = hamiltonian_filtered_;
 }
 
 void ImpedanceController::robot_description_param_cb(

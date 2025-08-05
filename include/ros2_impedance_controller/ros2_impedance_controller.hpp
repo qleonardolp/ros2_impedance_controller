@@ -130,9 +130,9 @@ protected:
   void ph_diagnostics();
 
   /**
-   * @brief Compute impedance port I/O energy, to evaluate passivity.
+   * @brief Compute impedance-related port power
    */
-  void compute_inout_energy();
+  void compute_inout_power();
 
   /**
    * @brief Compute Cartesian impedance Hamiltonian function
@@ -182,9 +182,10 @@ private:
   // Impedance power
   double impedance_power_{0};
   // Impedance Hamiltonian function value
-  double impedance_hamiltonian_{0};
-  // Expected interaction power
-  double expected_fint_power_{0};
+  double hamiltonian_{0};
+  double hamiltonian_last_{0};
+  double hamiltonian_filtered_{0};
+  double hamiltonian_derivative_{0};
   // Expected impedance input (u)
   Vector6d impedance_expected_input_;
 
@@ -254,11 +255,9 @@ private:
   // Interaction wrench goes on the accel field, replacing accelerations by forces and torques.
   rclcpp::Publisher<ReferenceType>::SharedPtr status_publisher_;
   std::unique_ptr<realtime_tools::RealtimePublisher<ReferenceType>> realtime_publisher_;
-  ReferenceType diagnostics_msg_;
 
   // Publisher for reference visualization
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
-
   visualization_msgs::msg::Marker marker_;
 };
 
