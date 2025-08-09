@@ -47,8 +47,8 @@ typedef Eigen::Matrix<double, Eigen::Dynamic, 1, 0, kMaxJointSpaceDim, 1> Vector
 // Task space generalized inertia matrix eigenvalues
 const Vector6d kDefaultInertia(0.000220625, 0.00256287, 0.00588485, 3.82715, 10.2802, 131.032);
 
-// Default damping ratio when no damping and inertia are set
-const double kDampingRatio = 0.50;
+// Default damping ratio
+const double kDampingRatio = 0.75;
 
 /**
  * \brief Cartesian impedance controller for articulated robots.

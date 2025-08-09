@@ -61,7 +61,7 @@ ament_target_dependencies(${PROJECT_NAME} PUBLIC ${DEPENDENCIES})
 pluginlib_export_plugin_description_file(controller_interface ros2_impedance_controller.xml)
 
 install(
-  DIRECTORY config description launch worlds
+  DIRECTORY config launch worlds
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -75,9 +75,6 @@ install(
   LIBRARY DESTINATION lib
   INCLUDES DESTINATION include
 )
-
-ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/hooks/${PROJECT_NAME}.dsv.in")
-ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/hooks/${PROJECT_NAME}.sh.in")
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

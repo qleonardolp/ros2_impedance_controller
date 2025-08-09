@@ -540,6 +540,12 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     return controller_interface::CallbackReturn::ERROR;
   }
 
+  if (params_.stiffness.empty())
+  {
+    RCLCPP_ERROR(get_node()->get_logger(), "'stiffness' parameter was empty");
+    return controller_interface::CallbackReturn::ERROR;
+  }
+
   degrees_of_freedom_ = params_.joints.size();
   desired_stiffness_ = Vector6d(params_.stiffness.data()).asDiagonal();
   Vector6d inertia_diagonal = kDefaultInertia;
@@ -549,15 +555,10 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     RCLCPP_INFO(
       get_node()->get_logger(), "Desired Cartesian mass is 0.0. Inertia shaping disabled.");
 
-    if (!params_.damping.empty())
+    if (params_.damping.empty())
     {
-      desired_damping_.diagonal() = Vector6d(params_.damping.data());
-    }
-    else
-    {
-      desired_damping_.diagonal() =
-        2 * kDampingRatio *
-        (inertia_diagonal.array() * desired_stiffness_.diagonal().array()).abs().sqrt();
+      RCLCPP_ERROR(get_node()->get_logger(), "'damping' parameter was empty");
+      return controller_interface::CallbackReturn::ERROR;
     }
     inertia_shaping_ = false;
   }
@@ -568,9 +569,10 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     inertia_diagonal << mass, mass, mass, I, I, I;
     desired_inertia_.diagonal() = inertia_diagonal;
     desired_inertia_inv_ = inertia_diagonal.cwiseInverse().asDiagonal();
-    // Critically damped: D = 2 * sqrt(K * M)
+    // Damping: D = 2 * ζ * sqrt(K * M)
     desired_damping_.diagonal() =
-      2 * (inertia_diagonal.array() * desired_stiffness_.diagonal().array()).abs().sqrt();
+      2 * kDampingRatio *
+      (inertia_diagonal.array() * desired_stiffness_.diagonal().array()).abs().sqrt();
     inertia_shaping_ = true;
   }
 

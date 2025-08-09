@@ -36,7 +36,7 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "robot",
-            default_value="ur5.urdf.xacro",
+            default_value="ur5",
             description="Robot model.",
         )
     )
@@ -117,7 +117,13 @@ def generate_launch_description():
         [
             PathJoinSubstitution([FindExecutable(name="xacro")]),
             " ",
-            PathJoinSubstitution([package_share, "description", "urdf", robot_model]),
+            PathJoinSubstitution(
+                [
+                    FindPackageShare("ros2_descriptions"),
+                    "description/urdf",
+                    [robot_model, ".urdf.xacro"],
+                ]
+            ),
             " ",
             "use_gazebo:=true",
         ]

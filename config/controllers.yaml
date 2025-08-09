@@ -1,22 +1,3 @@
-controller_manager:
-  ros__parameters:
-    update_rate: 1000  # Hz
-    thread_priority: 98  # Range: 0-99. Default is 50
-
-    joint_state_broadcaster:
-      type: joint_state_broadcaster/JointStateBroadcaster
-
-    diagnostics:
-      threshold:
-        controllers:
-          execution_time:  # refers to controller's update cycle execution time in us
-            mean_error:
-              warn: 1000.0
-              error: 2000.0
-            standard_deviation:
-              warn: 100.0
-              error: 200.0
-
 impedance_controller:
   ros__parameters:
     type: ros2_impedance_controller/ImpedanceController
@@ -30,21 +11,9 @@ impedance_controller:
     base_link: base_link
     interaction_link: ee_link
     ft_sensor_topic: end_effector_ft_sensor
-    # stiffness: [1000.0, 1000.0, 1000.0, 300.0, 300.0, 300.0]
-    # taskspace_mass: 10.5835
-    stiffness: [196.0, 196.0, 196.0, 18.0, 18.0, 18.0]
-    damping: [28.0, 28.0, 28.0, 8.48, 8.48, 8.48]
-    taskspace_mass: 0.0
+    stiffness: [800.0, 800.0, 800.0, 120.0, 120.0, 120.0]
+    taskspace_mass: 10.0
+    # stiffness: [196.0, 196.0, 196.0, 18.0, 18.0, 18.0]
+    # damping: [28.0, 28.0, 28.0, 8.48, 8.48, 8.48]
+    # taskspace_mass: 0.0
     torque_cutoff: 20.0
-
-forward_effort_controller:
-  ros__parameters:
-    type: forward_command_controller/ForwardCommandController
-    joints:
-      - shoulder_pan_joint
-      - shoulder_lift_joint
-      - elbow_joint
-      - wrist_1_joint
-      - wrist_2_joint
-      - wrist_3_joint
-    interface_name: effort
