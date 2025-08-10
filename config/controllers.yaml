@@ -17,3 +17,17 @@ impedance_controller:
     # damping: [28.0, 28.0, 28.0, 8.48, 8.48, 8.48]
     # taskspace_mass: 0.0
     torque_cutoff: 20.0
+
+leg_impedance_controller:
+  ros__parameters:
+    type: ros2_impedance_controller/ImpedanceController
+    joints:
+      - fl_hipx
+      - fl_hipy
+      - fl_knee
+    base_link: body
+    interaction_link: fl_lleg
+    stiffness: [196.0, 196.0, 196.0, 0.0, 0.0, 0.0]
+    damping: [28.0, 28.0, 28.0, 0.0, 0.0, 0.0]
+    taskspace_mass: 0.0
+    torque_cutoff: 80.0

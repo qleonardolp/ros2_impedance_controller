@@ -115,19 +115,22 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     });
 
   sensor_wrench_.setZero();
-  interaction_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Wrench>(
-    params_.ft_sensor_topic, qos_lowlatency,
-    [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
-    {
-      // TODO(@me): compensate the sensor weight
-      Vector6d sensor_wrench_raw;
-      sensor_wrench_raw.head<3>() =
-        Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
-      sensor_wrench_raw.tail<3>() =
-        Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
-      const double lpf_alpha = 0.75855;  // LPF: cutoff 50, dt 0.01
-      sensor_wrench_ = lpf_alpha * sensor_wrench_raw + (1 - lpf_alpha) * sensor_wrench_;
-    });
+  if (!params_.ft_sensor_topic.empty())
+  {
+    interaction_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Wrench>(
+      params_.ft_sensor_topic, qos_lowlatency,
+      [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
+      {
+        // TODO(@me): compensate the sensor weight
+        Vector6d sensor_wrench_raw;
+        sensor_wrench_raw.head<3>() =
+          Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
+        sensor_wrench_raw.tail<3>() =
+          Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
+        const double lpf_alpha = 0.75855;  // LPF: cutoff 50, dt 0.01
+        sensor_wrench_ = lpf_alpha * sensor_wrench_raw + (1 - lpf_alpha) * sensor_wrench_;
+      });
+  }
 
   // Initialize dynamic Eigen members
   robot_positions_.resize(degrees_of_freedom_);
@@ -357,11 +360,17 @@ bool ImpedanceController::configure_robot_model()
 
   parameters_future.wait();
 
-  while (robot_urdf_.empty())
+  while (urdf_string_.empty())
   {
+    // TODO(@me): parse URDF file from ament_index::get_package_share_directory
+    // In this way, we can use a dedicated file, with only the necessary joints
+    // and links
   }
 
-  pinocchio::urdf::buildModelFromXML(robot_urdf_, robot_model_);
+  std::string share_dir = ament_index_cpp::get_package_share_directory("ros2_descriptions");
+  std::string urdf = share_dir + "/description/urdf/spot_leg.description.urdf.xacro";
+
+  pinocchio::urdf::buildModel(urdf, robot_model_);
   robot_data_ = std::make_shared<pinocchio::Data>(robot_model_);
 
   if (!robot_model_.existFrame(params_.interaction_link))
@@ -371,8 +380,7 @@ bool ImpedanceController::configure_robot_model()
     return false;
   }
   end_effector_frame_ = robot_model_.getFrameId(params_.interaction_link);
-  robot_model_.gravity =
-    pinocchio::Motion(Eigen::Vector3d(0.0, 0.0, -9.78265), Eigen::Vector3d::Zero());
+
   RCLCPP_INFO(
     get_node()->get_logger(), "Robot model %s loaded with %d DOFs", robot_model_.name.c_str(),
     robot_model_.nq);
@@ -527,7 +535,7 @@ void ImpedanceController::compute_hamiltonian()
 void ImpedanceController::robot_description_param_cb(
   std::shared_future<std::vector<rclcpp::Parameter>> future)
 {
-  robot_urdf_ = future.get().at(0).as_string();
+  urdf_string_ = future.get().at(0).as_string();
 }
 
 controller_interface::CallbackReturn ImpedanceController::read_parameters()
@@ -548,7 +556,6 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
 
   degrees_of_freedom_ = params_.joints.size();
   desired_stiffness_ = Vector6d(params_.stiffness.data()).asDiagonal();
-  Vector6d inertia_diagonal = kDefaultInertia;
 
   if (std::fpclassify(params_.taskspace_mass) == FP_ZERO)
   {
@@ -564,6 +571,7 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
   }
   else
   {
+    Vector6d inertia_diagonal;
     const double mass = params_.taskspace_mass;
     const double I = 0.4 * mass * (0.425 * 0.425);  // sphere moment of inertia
     inertia_diagonal << mass, mass, mass, I, I, I;

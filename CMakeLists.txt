@@ -13,6 +13,7 @@ if(${CMAKE_BUILD_TYPE} STREQUAL "Release")
 endif()
 
 set(DEPENDENCIES
+  ament_index_cpp
   Eigen3
   pinocchio
   generate_parameter_library

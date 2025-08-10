@@ -37,12 +37,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "robot",
             default_value="ur5",
-            description="Robot model.",
+            description="Robot model. Options: ur5, spot, spot_leg",
         )
     )
     declared_arguments.append(
         DeclareLaunchArgument(
-            "controller_name",
+            "controller",
             default_value="impedance_controller",
             description="Name of the controller. Useful to debug using the"
             + " 'forward_effort_controller' instead of the impedance controller.",
@@ -59,7 +59,7 @@ def generate_launch_description():
     # Arguments variables
     gz_gui = LaunchConfiguration("gz_gui")
     robot_model = LaunchConfiguration("robot")
-    controller_name = LaunchConfiguration("controller_name")
+    controller_name = LaunchConfiguration("controller")
 
     package_share = FindPackageShare("ros2_impedance_controller")
     gazebo_world = PathJoinSubstitution(
@@ -106,10 +106,6 @@ def generate_launch_description():
         arguments=[
             "-topic",
             "/robot_description",
-            "-name",
-            "UR5",
-            "-allow_renaming",
-            "true",
         ],
     )
     # Get URDF via xacro
@@ -120,7 +116,7 @@ def generate_launch_description():
             PathJoinSubstitution(
                 [
                     FindPackageShare("ros2_descriptions"),
-                    "description/urdf",
+                    "description",
                     [robot_model, ".urdf.xacro"],
                 ]
             ),
