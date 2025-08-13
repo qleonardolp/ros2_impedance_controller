@@ -28,9 +28,9 @@ leg_impedance_controller:
       - fl_hipy
       - fl_knee
     base_link: body
-    interaction_link: fl_lleg
-    stiffness: [196.0, 196.0, 220.0, 0.0, 0.0, 0.0]
-    damping: [28.0, 28.0, 30.0, 0.0, 0.0, 0.0]
+    interaction_link: fl_foot
+    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
+    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
     taskspace_mass: 0.0
     torque_cutoff: 60.0
     urdf_package: ros2_descriptions
