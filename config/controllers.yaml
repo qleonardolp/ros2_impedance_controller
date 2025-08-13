@@ -17,6 +17,8 @@ impedance_controller:
     # damping: [28.0, 28.0, 28.0, 8.48, 8.48, 8.48]
     # taskspace_mass: 0.0
     torque_cutoff: 20.0
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
 
 leg_impedance_controller:
   ros__parameters:
@@ -27,7 +29,9 @@ leg_impedance_controller:
       - fl_knee
     base_link: body
     interaction_link: fl_lleg
-    stiffness: [196.0, 196.0, 196.0, 0.0, 0.0, 0.0]
-    damping: [28.0, 28.0, 28.0, 0.0, 0.0, 0.0]
+    stiffness: [196.0, 196.0, 220.0, 0.0, 0.0, 0.0]
+    damping: [28.0, 28.0, 30.0, 0.0, 0.0, 0.0]
     taskspace_mass: 0.0
-    torque_cutoff: 80.0
+    torque_cutoff: 60.0
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/spot_leg.description.urdf.xacro

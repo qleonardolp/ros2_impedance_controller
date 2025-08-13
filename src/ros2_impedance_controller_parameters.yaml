@@ -48,6 +48,16 @@ ros2_impedance_controller:
       gt_eq<>: [0.0]
     }
   }
+  urdf_package: {
+    type: string,
+    default_value: "",
+    description: "Robot description package, used to find the package share directory.",
+  }
+  urdf_relative_path: {
+    type: string,
+    default_value: "",
+    description: "URDF relative path (to 'urdf_package'), with the file name.",
+  }
   visualize_reference: {
     type: bool,
     default_value: false,

@@ -75,7 +75,7 @@ def generate_launch_description():
             [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
         ),
         launch_arguments={
-            "gz_args": ["-r -v4 ", gazebo_world],
+            "gz_args": ["-r -v2 ", gazebo_world],
             "on_exit_shutdown": "true",
         }.items(),
         condition=IfCondition(gz_gui),
@@ -98,16 +98,7 @@ def generate_launch_description():
         parameters=[{"config_file": bridges}],
         output="screen",
     )
-    # Robot spawner in Gazebo
-    gz_entity_spawner = Node(
-        package="ros_gz_sim",
-        executable="create",
-        output="log",
-        arguments=[
-            "-topic",
-            "/robot_description",
-        ],
-    )
+
     # Get URDF via xacro
     robot_urdf = Command(
         [
@@ -120,8 +111,6 @@ def generate_launch_description():
                     [robot_model, ".urdf.xacro"],
                 ]
             ),
-            " ",
-            "use_gazebo:=true",
         ]
     )
 
@@ -130,6 +119,19 @@ def generate_launch_description():
         executable="robot_state_publisher",
         output="screen",
         parameters=[{"robot_description": robot_urdf}],
+    )
+
+    # Robot spawner in Gazebo.
+    # This node indirectly uses the robot_urdf parsed here,
+    # through the topic /robot_description
+    gz_entity_spawner = Node(
+        package="ros_gz_sim",
+        executable="create",
+        output="log",
+        arguments=[
+            "-topic",
+            "/robot_description",
+        ],
     )
 
     joint_state_broadcaster_spawner = Node(

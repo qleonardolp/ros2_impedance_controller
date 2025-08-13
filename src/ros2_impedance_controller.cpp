@@ -73,9 +73,6 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
     return ret;
   }
 
-  parameters_client_ =
-    std::make_shared<rclcpp::AsyncParametersClient>(get_node(), "/robot_state_publisher");
-
   if (!configure_robot_model())
   {
     return controller_interface::CallbackReturn::ERROR;
@@ -154,7 +151,6 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
 controller_interface::CallbackReturn ImpedanceController::on_cleanup(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  parameters_client_.reset();
   rt_reference_ptr_.reset();
   reference_subscriber_.reset();
   interaction_subscriber_.reset();
@@ -353,24 +349,10 @@ controller_interface::return_type ImpedanceController::update(
 
 bool ImpedanceController::configure_robot_model()
 {
-  parameters_client_->wait_for_service();
-  auto parameters_future = parameters_client_->get_parameters(
-    {"robot_description"},
-    std::bind(&ImpedanceController::robot_description_param_cb, this, std::placeholders::_1));
+  std::string urdf_file =
+    ament_index_cpp::get_package_share_directory(params_.urdf_package) + params_.urdf_relative_path;
 
-  parameters_future.wait();
-
-  while (urdf_string_.empty())
-  {
-    // TODO(@me): parse URDF file from ament_index::get_package_share_directory
-    // In this way, we can use a dedicated file, with only the necessary joints
-    // and links
-  }
-
-  std::string share_dir = ament_index_cpp::get_package_share_directory("ros2_descriptions");
-  std::string urdf = share_dir + "/description/urdf/spot_leg.description.urdf.xacro";
-
-  pinocchio::urdf::buildModel(urdf, robot_model_);
+  pinocchio::urdf::buildModel(urdf_file, robot_model_);
   robot_data_ = std::make_shared<pinocchio::Data>(robot_model_);
 
   if (!robot_model_.existFrame(params_.interaction_link))
@@ -532,15 +514,17 @@ void ImpedanceController::compute_hamiltonian()
   hamiltonian_last_ = hamiltonian_filtered_;
 }
 
-void ImpedanceController::robot_description_param_cb(
-  std::shared_future<std::vector<rclcpp::Parameter>> future)
-{
-  urdf_string_ = future.get().at(0).as_string();
-}
-
 controller_interface::CallbackReturn ImpedanceController::read_parameters()
 {
   params_ = param_listener_->get_params();
+
+  if (params_.urdf_package.empty() || params_.urdf_relative_path.empty())
+  {
+    RCLCPP_ERROR(
+      get_node()->get_logger(),
+      "Missing robot URDF package or path params, required for Pinocchio RBD library.");
+    return controller_interface::CallbackReturn::ERROR;
+  }
 
   if (params_.joints.empty())
   {
@@ -567,6 +551,7 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
       RCLCPP_ERROR(get_node()->get_logger(), "'damping' parameter was empty");
       return controller_interface::CallbackReturn::ERROR;
     }
+    desired_damping_ = Vector6d(params_.damping.data()).asDiagonal();
     inertia_shaping_ = false;
   }
   else

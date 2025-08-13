@@ -156,12 +156,7 @@ protected:
   Params params_;
 
 private:
-  void robot_description_param_cb(std::shared_future<std::vector<rclcpp::Parameter>> future);
-
   void configure_visualization_marker();
-
-  std::shared_ptr<rclcpp::AsyncParametersClient> parameters_client_;
-  std::string urdf_string_;
 
   std::vector<const hardware_interface::LoanedStateInterface *> position_interfaces_;
   std::vector<const hardware_interface::LoanedStateInterface *> velocity_interfaces_;
