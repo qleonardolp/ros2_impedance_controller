@@ -333,15 +333,6 @@ controller_interface::return_type ImpedanceController::update(
   compute_inout_power();  // needs desired_inertia_ updated
   compute_hamiltonian();
 
-  if (debug_logger_)
-  {
-    Eigen::SelfAdjointEigenSolver<Matrix6d> lambda_eig(desired_inertia_, Eigen::EigenvaluesOnly);
-    RCLCPP_INFO_STREAM(
-      get_node()->get_logger(), "Lambda eigenvalues:\n"
-                                  << lambda_eig.eigenvalues().transpose());
-    debug_logger_ = false;
-  }
-
   ph_diagnostics();
   clock_time_last_ = time;
   return controller_interface::return_type::OK;
@@ -476,8 +467,9 @@ void ImpedanceController::ph_diagnostics()
 {
   if (realtime_publisher_->trylock())
   {
-    // Robot Hamiltonian
-    realtime_publisher_->msg_.pose_twist.linear.x = robot_data_->mechanical_energy;
+    // Robot Hamiltonian - Impedance Hamiltonian
+    realtime_publisher_->msg_.pose_twist.linear.x =
+      robot_data_->mechanical_energy - hamiltonian_filtered_;
     // Commands input power
     realtime_publisher_->msg_.pose_twist.linear.y =
       robot_velocities_.transpose() * commands_filtered_;
