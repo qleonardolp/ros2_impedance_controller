@@ -210,6 +210,7 @@ private:
 
   // update_deviations variables (task space)
   ReferenceType desired_kpose_;
+  Vector6d actual_pose_;
   Vector6d actual_twist_;
   Vector6d actual_accel_;
   Vector6d desired_twist_;

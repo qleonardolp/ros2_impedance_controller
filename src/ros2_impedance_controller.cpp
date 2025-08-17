@@ -197,6 +197,7 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   desired_quaternion_.setIdentity();
   desired_position_.setZero();
   desired_twist_.setZero();
+  actual_pose_.setZero();
   actual_twist_.setZero();
   actual_accel_.setZero();
 
@@ -481,6 +482,11 @@ void ImpedanceController::ph_diagnostics()
     realtime_publisher_->msg_.pose_twist.angular.y = hamiltonian_derivative_;
     // Impedance I/O power
     realtime_publisher_->msg_.pose_twist.angular.z = impedance_power_;
+
+    actual_pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
+    realtime_publisher_->msg_.pose.position.x = actual_pose_(0);
+    realtime_publisher_->msg_.pose.position.y = actual_pose_(1);
+    realtime_publisher_->msg_.pose.position.z = actual_pose_(2);
 
     realtime_publisher_->unlockAndPublish();
   }
