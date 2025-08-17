@@ -51,7 +51,7 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "world",
-            default_value="mobile",
+            default_value="benchmark",
             description="Gazebo world. See worlds directory.",
         )
     )
