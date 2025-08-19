@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ros2_impedance_controller VERSION 1.0.0 LANGUAGES CXX)
+project(ros2_impedance_controller VERSION 1.1.0 LANGUAGES CXX)
 
 find_package(ros2_control_cmake REQUIRED)
 set_compiler_options()  # Set compiler according to ROS2 standard
