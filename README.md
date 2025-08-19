@@ -37,11 +37,11 @@ The controller implement the classical impedance control law:
 $$
 \color{Black} \mathbf{\tau_{act}} = \mathbf{g}(\mathbf{q}) +
     \mathbf{J}(\mathbf{q})^{T}\,[\mathbf{\Lambda}(\mathbf{x})\,\ddot{\mathbf{x}}_{d} + \mathbf{\Omega}(\mathbf{x}, \dot{\mathbf{x}})\,\dot{\mathbf{x}}\,
-    -\mathbf{\Lambda}(\mathbf{x})\,\mathbf{\Lambda_d}^{-1}\,(\mathbf{D_d}\,\dot{\mathbf{e}} + \mathbf{K_d}\,\mathbf{e}) + \color{DarkGreen}
-    (\mathbf{\Lambda}(\mathbf{x})\,\mathbf{\Lambda_d}^{-1} - \mathbf{I})\,\mathbf{f_{int}} \color{Black}]
+    -\mathbf{\Lambda}(\mathbf{x})\,\mathbf{\Lambda_d}^{-1}\,(\mathbf{D_d}\,\dot{\mathbf{e}} + \mathbf{K_d}\,\mathbf{e}) +
+    (\mathbf{\Lambda}(\mathbf{x})\,\mathbf{\Lambda_d}^{-1} - \mathbf{I})\,\mathbf{f_{int}}]
 $$
 
-The green term is optional. Without inertia shaping, the force-torque sensor feedback is not required. Then, the law simplifies to:
+The last term is optional. Without inertia shaping, the force-torque sensor feedback is not required. Then, the law simplifies to:
 
 $$
 \color{Black} \mathbf{\tau_{act}} = \mathbf{g}(\mathbf{q}) +
