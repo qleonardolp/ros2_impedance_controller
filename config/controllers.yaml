@@ -1,11 +1,3 @@
-controller_manager:
-  ros__parameters:
-    update_rate: 1000  # Hz
-
-    joint_state_broadcaster:
-      type: joint_state_broadcaster/JointStateBroadcaster
-
-
 impedance_controller:
   ros__parameters:
     type: ros2_impedance_controller/ImpedanceController
@@ -18,18 +10,28 @@ impedance_controller:
       - wrist_3_joint
     base_link: base_link
     interaction_link: ee_link
-    stiffness: [1000.0, 1000.0, 1000.0, 60.0, 60.0, 60.0]
-    damping: [50.0, 100.0, 100.0, 7.0, 7.0, 7.0]
-    degrees_of_freedom: 6
+    ft_sensor_topic: end_effector_ft_sensor
+    stiffness: [800.0, 800.0, 800.0, 120.0, 120.0, 120.0]
+    taskspace_mass: 10.0
+    # stiffness: [196.0, 196.0, 196.0, 18.0, 18.0, 18.0]
+    # damping: [28.0, 28.0, 28.0, 8.48, 8.48, 8.48]
+    # taskspace_mass: 0.0
+    torque_cutoff: 500.0
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
 
-forward_effort_controller:
+leg_impedance_controller:
   ros__parameters:
-    type: forward_command_controller/ForwardCommandController
+    type: ros2_impedance_controller/ImpedanceController
     joints:
-      - shoulder_pan_joint
-      - shoulder_lift_joint
-      - elbow_joint
-      - wrist_1_joint
-      - wrist_2_joint
-      - wrist_3_joint
-    interface_name: effort
+      - fl_hipx
+      - fl_hipy
+      - fl_knee
+    base_link: body
+    interaction_link: fl_foot
+    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
+    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
+    taskspace_mass: 0.0
+    torque_cutoff: 500.0
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/spot_leg.description.urdf.xacro

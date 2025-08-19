@@ -14,18 +14,52 @@ ros2_impedance_controller:
     default_value: "",
     description: "Name of the link used for interaction port, usually is the robot end effector.",
   }
-  degrees_of_freedom: {
-    type: int,
-    default_value: 6,
-    description: "Expected degrees of freedom (joints) between the base_link and the interaction_link. It is updated according the parsed URDF.",
+  ft_sensor_topic: {
+    type: string,
+    default_value: "",
+    description: "Force-torque sensor topic name",
   }
   stiffness: {
     type: double_array,
-    default_value: [250.0, 250.0, 250.0, 10.0, 10.0, 10.0],
+    default_value: [1000.0, 1000.0, 1000.0, 300.0, 300.0, 300.0],
     description: "Cartesian stiffness gains [N/m, N/m, N/m, Nm/rad, Nm/rad, Nm/rad]",
   }
   damping: {
     type: double_array,
-    default_value: [15.0, 15.0, 15.0, 3.0, 3.0, 3.0],
+    default_value: [],
     description: "Cartesian damping gains [N.s/m, N.s/m, N.s/m, Nm.s/rad, Nm.s/rad, Nm.s/rad]",
+  }
+  taskspace_mass: {
+    type: double,
+    default_value: 10.58345,
+    description: "Desired Cartesian mass. This value defines m_x, m_y, and m_z,
+    since the translational part of the generalized inertia matrix must be the same.
+    The inertia tensor (rotational part) is of a solid sphere with this mass, and
+    radius 0.5 m.",
+    validation: {
+      gt_eq<>: [0.0]
+    }
+  }
+  torque_cutoff: {
+    type: double,
+    default_value: 25.0,
+    description: "Low-pass filter cutoff frequency [Hz] of the commanded efforts (torques)",
+    validation: {
+      gt_eq<>: [0.0]
+    }
+  }
+  urdf_package: {
+    type: string,
+    default_value: "",
+    description: "Robot description package, used to find the package share directory.",
+  }
+  urdf_relative_path: {
+    type: string,
+    default_value: "",
+    description: "URDF relative path (to 'urdf_package'), with the file name.",
+  }
+  visualize_reference: {
+    type: bool,
+    default_value: false,
+    read_only: true,
   }

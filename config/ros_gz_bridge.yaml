@@ -1,0 +1,13 @@
+---
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/end_effector_ft_sensor"
+  gz_topic_name: "/end_effector_ft_sensor"
+  ros_type_name: "geometry_msgs/msg/Wrench"
+  gz_type_name: "gz.msgs.Wrench"
+  subscriber_queue: 5       # Default 10
+  publisher_queue: 6        # Default 10
+  direction: GZ_TO_ROS

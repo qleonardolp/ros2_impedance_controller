@@ -1,25 +1,35 @@
 cmake_minimum_required(VERSION 3.16)
-project(ros2_impedance_controller LANGUAGES CXX)
+project(ros2_impedance_controller VERSION 1.1.0 LANGUAGES CXX)
 
 find_package(ros2_control_cmake REQUIRED)
-set_compiler_options()
+set_compiler_options()  # Set compiler according to ROS2 standard
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo)
+endif()
+
+if(${CMAKE_BUILD_TYPE} STREQUAL "Release")
+  message(STATUS "Building Release, with flags ${CMAKE_CXX_FLAGS_RELEASE}")
+endif()
 
 set(DEPENDENCIES
   ament_index_cpp
-  controller_interface
   Eigen3
-  geometry_msgs
+  pinocchio
   generate_parameter_library
+  controller_interface
   hardware_interface
+  realtime_tools
   pluginlib
   rclcpp
   rclcpp_lifecycle
-  realtime_tools
+  geometry_msgs
+  visualization_msgs
+  kinematic_pose_msgs
 )
 
 find_package(ament_cmake REQUIRED)
 find_package(backward_ros REQUIRED)
-find_package(DART REQUIRED COMPONENTS utils-urdf)
 
 foreach(Dependency IN ITEMS ${DEPENDENCIES})
   find_package(${Dependency} REQUIRED)
@@ -33,6 +43,10 @@ generate_parameter_library(
 add_library(${PROJECT_NAME} SHARED src/ros2_impedance_controller.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+target_precompile_headers(
+  ${PROJECT_NAME} PRIVATE
+  include/ros2_impedance_controller/ros2_impedance_controller_pch.hpp
+)
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
@@ -41,13 +55,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
   ros2_impedance_controller_parameters
+  pinocchio::pinocchio
 )
 
-ament_target_dependencies(${PROJECT_NAME} PUBLIC ${DEPENDENCIES} DART)
+ament_target_dependencies(${PROJECT_NAME} PUBLIC ${DEPENDENCIES})
 pluginlib_export_plugin_description_file(controller_interface ros2_impedance_controller.xml)
 
 install(
-  DIRECTORY config description launch
+  DIRECTORY config launch worlds
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -61,9 +76,6 @@ install(
   LIBRARY DESTINATION lib
   INCLUDES DESTINATION include
 )
-
-ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/hooks/${PROJECT_NAME}.dsv.in")
-ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/hooks/${PROJECT_NAME}.sh.in")
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

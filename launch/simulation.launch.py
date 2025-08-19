@@ -27,15 +27,8 @@ def generate_launch_description():
     declared_arguments = []
     declared_arguments.append(
         DeclareLaunchArgument(
-            "debug",
-            default_value="false",
-            description="Attach gdbserver to the controller manager node.",
-        )
-    )
-    declared_arguments.append(
-        DeclareLaunchArgument(
             "gz_gui",
-            default_value="false",
+            default_value="true",
             description="Start Gazebo GUI. The default behavior"
             + " starts gazebo in server mode using Rviz2 as graphical interface.",
         )
@@ -43,67 +36,67 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "robot",
-            default_value="ur5.urdf.xacro",
-            description="Robot model.",
+            default_value="ur5",
+            description="Robot model. Options: ur5, spot, spot_leg",
         )
     )
     declared_arguments.append(
         DeclareLaunchArgument(
-            "use_gazebo",
-            default_value="true",
-        )
-    )
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "controller_name",
+            "controller",
             default_value="impedance_controller",
             description="Name of the controller. Useful to debug using the"
             + " 'forward_effort_controller' instead of the impedance controller.",
         )
     )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "world",
+            default_value="benchmark",
+            description="Gazebo world. See worlds directory.",
+        )
+    )
 
-    # Initialize Arguments
-    debug = LaunchConfiguration("debug")
-    robot_model = LaunchConfiguration("robot")
+    # Arguments variables
     gz_gui = LaunchConfiguration("gz_gui")
-    controller_name = LaunchConfiguration("controller_name")
+    robot_model = LaunchConfiguration("robot")
+    controller_name = LaunchConfiguration("controller")
+
+    package_share = FindPackageShare("ros2_impedance_controller")
+    gazebo_world = PathJoinSubstitution(
+        [package_share, "worlds", [LaunchConfiguration("world"), ".sdf"]]
+    )
+    bridges = PathJoinSubstitution([package_share, "config", "ros_gz_bridge.yaml"])
+    controllers = PathJoinSubstitution([package_share, "config", "controllers.yaml"])
+    rviz_config = PathJoinSubstitution([package_share, "config", "rviz2.rviz"])
 
     # gazebo
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
         ),
-        launch_arguments=[("gz_args", " -r -v 3 empty.sdf")],
+        launch_arguments={
+            "gz_args": ["-r -v2 ", gazebo_world],
+            "on_exit_shutdown": "true",
+        }.items(),
         condition=IfCondition(gz_gui),
     )
     gazebo_headless = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
         ),
-        launch_arguments=[("gz_args", ["--headless-rendering -s -r -v 3 empty.sdf"])],
+        launch_arguments={
+            "gz_args": ["-s -r -v0 ", gazebo_world],
+            "on_exit_shutdown": "true",
+        }.items(),
         condition=UnlessCondition(gz_gui),
     )
 
-    # Gazebo bridge
+    # ROS-Gazebo bridges
     gazebo_bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
-        arguments=["/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock"],
-        output="log",
-    )
-
-    gz_spawn_entity = Node(
-        package="ros_gz_sim",
-        executable="create",
-        output="log",
-        arguments=[
-            "-topic",
-            "/robot_description",
-            "-name",
-            "ur5",
-            "-allow_renaming",
-            "true",
-        ],
+        parameters=[{"config_file": bridges}],
+        output="screen",
     )
 
     # Get URDF via xacro
@@ -112,42 +105,33 @@ def generate_launch_description():
             PathJoinSubstitution([FindExecutable(name="xacro")]),
             " ",
             PathJoinSubstitution(
-                [FindPackageShare("ros2_impedance_controller"), "description", "urdf", robot_model]
+                [
+                    FindPackageShare("ros2_descriptions"),
+                    "description",
+                    [robot_model, ".urdf.xacro"],
+                ]
             ),
-            " ",
-            "use_gazebo:=true",
         ]
-    )
-    robot_description = {"robot_description": robot_urdf}
-
-    controllers = PathJoinSubstitution(
-        [
-            FindPackageShare("ros2_impedance_controller"),
-            "config",
-            "controllers.yaml",
-        ]
-    )
-
-    rviz_config = PathJoinSubstitution(
-        [FindPackageShare("ros2_impedance_controller"), "config", "rviz2.rviz"]
     )
 
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         output="screen",
-        parameters=[robot_description],
+        parameters=[{"robot_description": robot_urdf}],
     )
 
-    controller_manager = Node(
-        package="controller_manager",
-        executable="ros2_control_node",
-        parameters=[controllers],
-        output="both",
-        emulate_tty=True,
-        remappings=[("~/robot_description", "/robot_description")],
-        prefix=["gdbserver localhost:3000"],
-        condition=IfCondition(debug),
+    # Robot spawner in Gazebo.
+    # This node indirectly uses the robot_urdf parsed here,
+    # through the topic /robot_description
+    gz_entity_spawner = Node(
+        package="ros_gz_sim",
+        executable="create",
+        output="log",
+        arguments=[
+            "-topic",
+            "/robot_description",
+        ],
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -180,8 +164,7 @@ def generate_launch_description():
         gazebo_headless,
         gazebo_bridge,
         robot_state_publisher,
-        gz_spawn_entity,
-        controller_manager,
+        gz_entity_spawner,
         joint_state_broadcaster_spawner,
         impedance_controller_spawner,
         rviz,
