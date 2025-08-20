@@ -1,6 +1,6 @@
 # ros2_impedance_controller
 
-Robot impedance controller designed with the `ros2_control` framework and Pinocchio.
+Robot impedance controller designed with the `ros2_control` framework and Pinocchio. Default branch ROS2 distro: Jazzy
 
 - Custom build dependency: [kinematic_pose_msgs](https://github.com/qleonardolp/kinematic_pose_msgs)
 - Simulation dependency: [ros2_descriptions](https://github.com/qleonardolp/ros2_descriptions)
