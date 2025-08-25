@@ -334,7 +334,8 @@ controller_interface::return_type ImpedanceController::update(
   compute_inout_power();  // needs desired_inertia_ updated
   compute_hamiltonian();
 
-  ph_diagnostics();
+  // ph_diagnostics();
+  publish_impedance_space();
   clock_time_last_ = time;
   return controller_interface::return_type::OK;
 }
@@ -382,6 +383,7 @@ bool ImpedanceController::update_robot()
     robot_accelerations_(k) = (robot_velocities_(k) - robot_velocities_last_(k)) / ellapsed_time_;
     robot_velocities_last_(k) = robot_velocities_(k);
   }
+  // TODO(@me): investigate computeAllTerms
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_positions_, robot_velocities_);
   return true;
 }
@@ -453,12 +455,12 @@ void ImpedanceController::publish_impedance_space()
     realtime_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
     realtime_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
 
-    realtime_publisher_->msg_.pose_accel.linear.x = sensor_wrench_(0);
-    realtime_publisher_->msg_.pose_accel.linear.y = sensor_wrench_(1);
-    realtime_publisher_->msg_.pose_accel.linear.z = sensor_wrench_(2);
-    realtime_publisher_->msg_.pose_accel.angular.x = sensor_wrench_(3);
-    realtime_publisher_->msg_.pose_accel.angular.y = sensor_wrench_(4);
-    realtime_publisher_->msg_.pose_accel.angular.z = sensor_wrench_(5);
+    realtime_publisher_->msg_.pose_accel.linear.x = impedance_wrench_(0);
+    realtime_publisher_->msg_.pose_accel.linear.y = impedance_wrench_(1);
+    realtime_publisher_->msg_.pose_accel.linear.z = impedance_wrench_(2);
+    realtime_publisher_->msg_.pose_accel.angular.x = impedance_wrench_(3);
+    realtime_publisher_->msg_.pose_accel.angular.y = impedance_wrench_(4);
+    realtime_publisher_->msg_.pose_accel.angular.z = impedance_wrench_(5);
 
     realtime_publisher_->unlockAndPublish();
   }
