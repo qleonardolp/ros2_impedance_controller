@@ -193,6 +193,7 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   twist_deviation_.setZero();
   desired_pose_accel_.setZero();
   impedance_wrench_.setZero();
+  estimated_wrench_.setZero();
 
   desired_quaternion_.setIdentity();
   desired_position_.setZero();
@@ -281,6 +282,9 @@ controller_interface::return_type ImpedanceController::update(
 
   update_deviations();  // needs jacobian_ updated
 
+  estimated_wrench_.noalias() =
+    jacobian_.transpose().inverse() * (robot_efforts_ - commands_filtered_);
+
   pinocchio::getFrameJacobianTimeVariation(
     robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
     jacobian_derivative_);
@@ -335,7 +339,7 @@ controller_interface::return_type ImpedanceController::update(
   compute_hamiltonian();
 
   // ph_diagnostics();
-  publish_impedance_space();
+  zspace_diagnostics();
   clock_time_last_ = time;
   return controller_interface::return_type::OK;
 }
@@ -436,7 +440,7 @@ void ImpedanceController::update_deviations()
   }
 }
 
-void ImpedanceController::publish_impedance_space()
+void ImpedanceController::zspace_diagnostics()
 {
   if (realtime_publisher_->trylock())
   {
@@ -455,12 +459,12 @@ void ImpedanceController::publish_impedance_space()
     realtime_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
     realtime_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
 
-    realtime_publisher_->msg_.pose_accel.linear.x = impedance_wrench_(0);
-    realtime_publisher_->msg_.pose_accel.linear.y = impedance_wrench_(1);
-    realtime_publisher_->msg_.pose_accel.linear.z = impedance_wrench_(2);
-    realtime_publisher_->msg_.pose_accel.angular.x = impedance_wrench_(3);
-    realtime_publisher_->msg_.pose_accel.angular.y = impedance_wrench_(4);
-    realtime_publisher_->msg_.pose_accel.angular.z = impedance_wrench_(5);
+    realtime_publisher_->msg_.pose_accel.linear.x = estimated_wrench_(0);
+    realtime_publisher_->msg_.pose_accel.linear.y = estimated_wrench_(1);
+    realtime_publisher_->msg_.pose_accel.linear.z = estimated_wrench_(2);
+    realtime_publisher_->msg_.pose_accel.angular.x = estimated_wrench_(3);
+    realtime_publisher_->msg_.pose_accel.angular.y = estimated_wrench_(4);
+    realtime_publisher_->msg_.pose_accel.angular.z = estimated_wrench_(5);
 
     realtime_publisher_->unlockAndPublish();
   }

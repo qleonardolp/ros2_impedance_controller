@@ -113,11 +113,10 @@ protected:
   void update_deviations();
 
   /**
-   * @brief Convert pose_deviation_ and twist_deviation_ to pose and
-   * twist, respectively. Also include the interaction wrench in the
-   * KinematicPose message and publish it.
+   * @brief Impedance space diagnostics with pose_deviation_, twist_deviation_,
+   * and interaction wrench estimation. Publisher reuse the KinematicPose type.
    */
-  void publish_impedance_space();
+  void zspace_diagnostics();
 
   /**
    * @brief Port-Hamiltonian diagnostics with:
@@ -201,6 +200,8 @@ private:
   Vector6d impedance_wrench_;
   // Interaction wrench [forces, torques].T
   Vector6d sensor_wrench_;
+  // Interaction wrench estimation
+  Vector6d estimated_wrench_;
   // End effector pose deviation
   Vector6d pose_deviation_;
   // End effector twist deviation
