@@ -464,7 +464,19 @@ void ImpedanceController::zspace_diagnostics()
     realtime_publisher_->msg_.pose_accel.linear.z = estimated_wrench_(2);
     realtime_publisher_->msg_.pose_accel.angular.x = estimated_wrench_(3);
     realtime_publisher_->msg_.pose_accel.angular.y = estimated_wrench_(4);
-    realtime_publisher_->msg_.pose_accel.angular.z = estimated_wrench_(5);
+    // realtime_publisher_->msg_.pose_accel.angular.z = estimated_wrench_(5);
+
+    // Phase space divergence
+    if (inertia_shaping_)
+    {
+      realtime_publisher_->msg_.pose_accel.angular.z =
+        -(desired_damping_ * Matrix6d::Identity() * desired_inertia_inv_).trace();
+    }
+    else
+    {
+      realtime_publisher_->msg_.pose_accel.angular.z =
+        -(desired_damping_ * desired_inertia_.inverse()).trace();
+    }
 
     realtime_publisher_->unlockAndPublish();
   }
