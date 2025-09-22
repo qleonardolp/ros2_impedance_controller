@@ -194,8 +194,10 @@ private:
   DiagonalMatrix6d desired_damping_;
   // Inverse of the desired inertia
   DiagonalMatrix6d desired_inertia_inv_;
-  // Desired inertia
+  // Desired inertia. Its the osim when not shaping inertia
   Matrix6d desired_inertia_;
+  // Operational space inertia matrix (osim)
+  Matrix6d actual_inertia_;
   // Desired impedance wrench [forces, torques].T
   Vector6d impedance_wrench_;
   // Interaction wrench [forces, torques].T
@@ -236,7 +238,9 @@ private:
   Matrix6Xd jacobian_;
   Matrix6Xd jacobian_derivative_;
   Eigen::MatrixXd jacobian_pinv_;
+  Eigen::MatrixXd jacobianT_pinv_;
   Eigen::MatrixXd jsim_jpinv_;
+  Eigen::MatrixXd jsim_jpinv_dj_;
 
   // Controller Reference Subscriber
   realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>> rt_reference_ptr_;

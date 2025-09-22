@@ -75,7 +75,7 @@ def generate_launch_description():
             [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
         ),
         launch_arguments={
-            "gz_args": ["-r -v2 ", gazebo_world],
+            "gz_args": ["-r -v1 ", gazebo_world],
             "on_exit_shutdown": "true",
         }.items(),
         condition=IfCondition(gz_gui),
