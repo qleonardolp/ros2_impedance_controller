@@ -334,8 +334,8 @@ controller_interface::return_type ImpedanceController::update(
   compute_inout_power();  // needs desired_inertia_ updated
   compute_hamiltonian();
 
-  // ph_diagnostics();
-  zspace_diagnostics();
+  ph_diagnostics();
+  // zspace_diagnostics();
   clock_time_last_ = time;
   return controller_interface::return_type::OK;
 }
@@ -518,12 +518,10 @@ void ImpedanceController::ph_diagnostics()
 
 void ImpedanceController::compute_inout_power()
 {
-  actual_accel_.noalias() =
-    jacobian_ * robot_accelerations_ + jacobian_derivative_ * robot_velocities_;
-
-  // TODO(@me): compute this expected power with desired_inertia_ and actual_inertia_
-  impedance_expected_input_.noalias() = desired_inertia_ * actual_accel_ + impedance_wrench_;
-  impedance_power_ = twist_deviation_.transpose() * impedance_expected_input_;
+  // actual_accel_.noalias() =
+  //   jacobian_ * robot_accelerations_ + jacobian_derivative_ * robot_velocities_;
+  // impedance_expected_input_.noalias() = desired_inertia_ * actual_accel_ + impedance_wrench_;
+  impedance_power_ = twist_deviation_.transpose() * impedance_wrench_;
 }
 
 void ImpedanceController::compute_hamiltonian()
