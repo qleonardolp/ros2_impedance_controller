@@ -118,7 +118,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
       params_.ft_sensor_topic, qos_lowlatency,
       [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
       {
-        // TODO(@me): compensate the sensor weight
+        // TODO(@qleonardolp): compensate the sensor weight
         Vector6d sensor_wrench_raw;
         sensor_wrench_raw.head<3>() =
           Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
@@ -383,7 +383,6 @@ bool ImpedanceController::update_robot()
     robot_accelerations_(k) = (robot_velocities_(k) - robot_velocities_last_(k)) / ellapsed_time_;
     robot_velocities_last_(k) = robot_velocities_(k);
   }
-  // TODO(@me): investigate computeAllTerms
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_positions_, robot_velocities_);
   pinocchio::computeMinverse(robot_model_, *robot_data_.get(), robot_positions_);
   return true;
@@ -467,7 +466,7 @@ void ImpedanceController::zspace_diagnostics()
     // Phase space (q,p) divergence
     realtime_publisher_->msg_.pose_accel.angular.y = -(jsim_jpinv_dj_ * robot_data_->Minv).trace();
 
-    // TODO(@me) investigate the trace for non square matrices (nDoF < m)
+    // TODO(@qleonardolp) investigate the trace for non square matrices (nDoF < m)
     // Eigen::DiagonalMatrix<double, Eigen::Dynamic, kCartesianSpaceDim> damping(
     //   desired_damping_.diagonal().segment(0, degrees_of_freedom_));
 
@@ -526,7 +525,7 @@ void ImpedanceController::compute_inout_power()
 
 void ImpedanceController::compute_hamiltonian()
 {
-  // TODO(@me): compute H with desired_inertia_ and actual_inertia_
+  // TODO(@qleonardolp): compute H with desired_inertia_ and actual_inertia_
   hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
   hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
   hamiltonian_ = 0.5 * hamiltonian_;
