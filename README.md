@@ -32,22 +32,4 @@ ros2 control set_controller_state leg_impedance_controller active
 
 ## About
 
-The controller implement the classical impedance control law:
-
-```math
-\color{Black} \mathbf{\tau_{act}} = \mathbf{g}(\mathbf{q}) +
-    \mathbf{J}(\mathbf{q})^{T}\,[\mathbf{\Lambda}(\mathbf{x})\,\ddot{\mathbf{x}}_{d} + \mathbf{\Omega}(\mathbf{x}, \dot{\mathbf{x}})\,\dot{\mathbf{x}}\,
-    -\mathbf{\Lambda}(\mathbf{x})\,\mathbf{\Lambda_d}^{-1}\,(\mathbf{D_d}\,\dot{\mathbf{e}} + \mathbf{K_d}\,\mathbf{e}) +
-    \color{DarkGreen} (\mathbf{\Lambda}(\mathbf{x})\,\mathbf{\Lambda_d}^{-1} - \mathbf{I})\,\mathbf{f_{int}} \color{Black}]
-```
-
-The last green term is optional. Without inertia shaping, the force-torque sensor feedback is not required. Then, the law simplifies to:
-
-```math
-\color{Black} \mathbf{\tau_{act}} = \mathbf{g}(\mathbf{q}) +
-    \mathbf{J}(\mathbf{q})^{T}\,[\mathbf{\Lambda}(\mathbf{x})\,\ddot{\mathbf{x}}_{d} + \mathbf{\Omega}(\mathbf{x}, \dot{\mathbf{x}})\,\dot{\mathbf{x}}\,
-    -\mathbf{D_d}\,\dot{\mathbf{e}} - \mathbf{K_d}\,\mathbf{e}]
-```
-
-Please be aware that, without inertia shaping, the desired inertia is the robot current inertia.
-Refer to Ott, C., 2008, _Cartesian Impedance Control of Redundant and Flexible-Joint Robots_ for further details.
+The controller implement the classical impedance control law, following the notation from the book _Cartesian Impedance Control of Redundant and Flexible-Joint Robots_, Ott, C., 2008. Please check the [documentation](doc/ros2_impedance_controller_documentation.pdf) for further details.
