@@ -3,7 +3,8 @@ Changelog for package ros2_impedance_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 1.2.0 (2025-10-01)
-* Fix `twist_compensation_` term
+------------------
+* Fix ``twist_compensation_`` term
 * Adjust the impedance power computation for step power analysis only
 * Add controller math documentation
 
@@ -14,7 +15,7 @@ Changelog for package ros2_impedance_controller
 * Add Port-Hamiltonian based diagnostics
 * Support N-DoF robots. Tested with 6-DoF arm and 3-DoF leg
 * Migrate robot description to `ros2_descriptions <https://github.com/qleonardolp/ros2_descriptions>`_
-* Load robot URDF from `urdf_package` and `urdf_relative_path` params
+* Load robot URDF from ``urdf_package`` and ``urdf_relative_path`` params
 * Derive the damping gains from the desired stiffness and mass when using inertia shaping
 * Deprecate DART. Using Pinocchio rigid body dynamics library instead.
 
