@@ -118,7 +118,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
       params_.ft_sensor_topic, qos_lowlatency,
       [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
       {
-        // TODO(@me): compensate the sensor weight
+        // TODO(@qleonardolp): compensate the sensor weight
         Vector6d sensor_wrench_raw;
         sensor_wrench_raw.head<3>() =
           Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
@@ -141,9 +141,11 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
   accel_feedforward_.resize(degrees_of_freedom_);
   impedance_torques_.resize(degrees_of_freedom_);
   jacobian_ = Matrix6Xd::Zero(kCartesianSpaceDim, degrees_of_freedom_);
-  jacobian_derivative_ = Matrix6Xd::Zero(kCartesianSpaceDim, degrees_of_freedom_);
   jacobian_pinv_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, kCartesianSpaceDim);
+  jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianSpaceDim, degrees_of_freedom_);
+  jacobian_derivative_ = Matrix6Xd::Zero(kCartesianSpaceDim, degrees_of_freedom_);
   jsim_jpinv_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, kCartesianSpaceDim);
+  jsim_jpinv_dj_ = Eigen::MatrixXd::Zero(degrees_of_freedom_, degrees_of_freedom_);
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -193,6 +195,7 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   twist_deviation_.setZero();
   desired_pose_accel_.setZero();
   impedance_wrench_.setZero();
+  estimated_wrench_.setZero();
 
   desired_quaternion_.setIdentity();
   desired_position_.setZero();
@@ -281,15 +284,21 @@ controller_interface::return_type ImpedanceController::update(
 
   update_deviations();  // needs jacobian_ updated
 
+  jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
+  jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
+
+  estimated_wrench_.noalias() = jacobianT_pinv_ * (robot_efforts_ - commands_filtered_);
+
   pinocchio::getFrameJacobianTimeVariation(
     robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
     jacobian_derivative_);
 
-  jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
-
   robot_data_->M.triangularView<Eigen::StrictlyLower>() =
     robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
+  jsim_jpinv_dj_ = jsim_jpinv_ * jacobian_derivative_;
+
+  actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
 
   impedance_wrench_.noalias() =
     (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
@@ -299,24 +308,15 @@ controller_interface::return_type ImpedanceController::update(
     impedance_torques_.noalias() =
       jsim_jpinv_ * desired_inertia_inv_ * (impedance_wrench_ + sensor_wrench_);
     impedance_torques_.noalias() -= jacobian_.transpose() * sensor_wrench_;
-
-    twist_compensation_.noalias() =
-      (robot_data_->C - jsim_jpinv_ * jacobian_derivative_) * robot_velocities_;
   }
   else
   {
     impedance_torques_.noalias() = jacobian_.transpose() * impedance_wrench_;
-
-    twist_compensation_.noalias() =
-      (robot_data_->C - jsim_jpinv_ * jacobian_derivative_) * jacobian_pinv_ * desired_twist_;
-
-    // Operational (task) space inertia matrix
-    desired_inertia_.noalias() =
-      jacobian_.transpose().colPivHouseholderQr().inverse() * jsim_jpinv_;
+    desired_inertia_ = actual_inertia_;
   }
 
   accel_feedforward_ = jsim_jpinv_ * desired_pose_accel_;
-
+  twist_compensation_.noalias() = (robot_data_->C - jsim_jpinv_dj_) * robot_velocities_;
   effort_commands_ = accel_feedforward_ + impedance_torques_ + twist_compensation_ + robot_data_->g;
 
   commands_filtered_ = command_alpha(ellapsed_time_) * effort_commands_ +
@@ -335,6 +335,7 @@ controller_interface::return_type ImpedanceController::update(
   compute_hamiltonian();
 
   ph_diagnostics();
+  // zspace_diagnostics();
   clock_time_last_ = time;
   return controller_interface::return_type::OK;
 }
@@ -383,6 +384,7 @@ bool ImpedanceController::update_robot()
     robot_velocities_last_(k) = robot_velocities_(k);
   }
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_positions_, robot_velocities_);
+  pinocchio::computeMinverse(robot_model_, *robot_data_.get(), robot_positions_);
   return true;
 }
 
@@ -434,7 +436,7 @@ void ImpedanceController::update_deviations()
   }
 }
 
-void ImpedanceController::publish_impedance_space()
+void ImpedanceController::zspace_diagnostics()
 {
   if (realtime_publisher_->trylock())
   {
@@ -453,12 +455,33 @@ void ImpedanceController::publish_impedance_space()
     realtime_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
     realtime_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
 
-    realtime_publisher_->msg_.pose_accel.linear.x = sensor_wrench_(0);
-    realtime_publisher_->msg_.pose_accel.linear.y = sensor_wrench_(1);
-    realtime_publisher_->msg_.pose_accel.linear.z = sensor_wrench_(2);
-    realtime_publisher_->msg_.pose_accel.angular.x = sensor_wrench_(3);
-    realtime_publisher_->msg_.pose_accel.angular.y = sensor_wrench_(4);
-    realtime_publisher_->msg_.pose_accel.angular.z = sensor_wrench_(5);
+    realtime_publisher_->msg_.pose_accel.linear.x = estimated_wrench_(0);
+    realtime_publisher_->msg_.pose_accel.linear.y = estimated_wrench_(1);
+    realtime_publisher_->msg_.pose_accel.linear.z = estimated_wrench_(2);
+    realtime_publisher_->msg_.pose_accel.angular.x = estimated_wrench_(3);
+
+    robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
+      robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
+
+    // Phase space (q,p) divergence
+    realtime_publisher_->msg_.pose_accel.angular.y = -(jsim_jpinv_dj_ * robot_data_->Minv).trace();
+
+    // TODO(@qleonardolp) investigate the trace for non square matrices (nDoF < m)
+    // Eigen::DiagonalMatrix<double, Eigen::Dynamic, kCartesianSpaceDim> damping(
+    //   desired_damping_.diagonal().segment(0, degrees_of_freedom_));
+
+    if (inertia_shaping_)
+    {
+      realtime_publisher_->msg_.pose_accel.angular.z =
+        -(actual_inertia_ * desired_inertia_inv_ * desired_damping_ * jacobian_ * robot_data_->Minv)
+           .trace();
+      // -(desired_damping_ * Matrix6d::Identity() * desired_inertia_inv_).trace();
+    }
+    else
+    {
+      realtime_publisher_->msg_.pose_accel.angular.z =
+        -(desired_damping_ * jacobian_ * robot_data_->Minv).trace();
+    }
 
     realtime_publisher_->unlockAndPublish();
   }
@@ -494,15 +517,15 @@ void ImpedanceController::ph_diagnostics()
 
 void ImpedanceController::compute_inout_power()
 {
-  actual_accel_.noalias() =
-    jacobian_ * robot_accelerations_ + jacobian_derivative_ * robot_velocities_;
-
-  impedance_expected_input_.noalias() = desired_inertia_ * actual_accel_ + impedance_wrench_;
-  impedance_power_ = twist_deviation_.transpose() * impedance_expected_input_;
+  // actual_accel_.noalias() =
+  //   jacobian_ * robot_accelerations_ + jacobian_derivative_ * robot_velocities_;
+  // impedance_expected_input_.noalias() = desired_inertia_ * actual_accel_ + impedance_wrench_;
+  impedance_power_ = twist_deviation_.transpose() * impedance_wrench_;
 }
 
 void ImpedanceController::compute_hamiltonian()
 {
+  // TODO(@qleonardolp): compute H with desired_inertia_ and actual_inertia_
   hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
   hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
   hamiltonian_ = 0.5 * hamiltonian_;
@@ -550,6 +573,7 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
       return controller_interface::CallbackReturn::ERROR;
     }
     desired_damping_ = Vector6d(params_.damping.data()).asDiagonal();
+    desired_inertia_.setIdentity();
     inertia_shaping_ = false;
   }
   else

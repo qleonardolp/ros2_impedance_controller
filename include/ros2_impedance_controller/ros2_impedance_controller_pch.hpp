@@ -17,6 +17,7 @@
 
 // Precompile headers
 
+#include "pinocchio/algorithm/aba.hpp"
 #include "pinocchio/algorithm/compute-all-terms.hpp"
 #include "pinocchio/algorithm/frames.hpp"  // computeFrameJacobian
 #include "pinocchio/parsers/urdf.hpp"      // ::urdf::buildModelFromXML

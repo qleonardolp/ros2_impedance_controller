@@ -2,6 +2,11 @@
 Changelog for package ros2_impedance_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.2.0 (2025-10-01)
+* Fix `twist_compensation_` term
+* Adjust the impedance power computation for step power analysis only
+* Add controller math documentation
+
 1.1.0 (2025-08-18)
 ------------------
 * Add control law documentation on README

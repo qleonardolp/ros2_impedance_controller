@@ -113,11 +113,10 @@ protected:
   void update_deviations();
 
   /**
-   * @brief Convert pose_deviation_ and twist_deviation_ to pose and
-   * twist, respectively. Also include the interaction wrench in the
-   * KinematicPose message and publish it.
+   * @brief Impedance space diagnostics with pose_deviation_, twist_deviation_,
+   * and interaction wrench estimation. Publisher reuse the KinematicPose type.
    */
-  void publish_impedance_space();
+  void zspace_diagnostics();
 
   /**
    * @brief Port-Hamiltonian diagnostics with:
@@ -195,12 +194,16 @@ private:
   DiagonalMatrix6d desired_damping_;
   // Inverse of the desired inertia
   DiagonalMatrix6d desired_inertia_inv_;
-  // Desired inertia
+  // Desired inertia. Its the osim when not shaping inertia
   Matrix6d desired_inertia_;
+  // Operational space inertia matrix (osim)
+  Matrix6d actual_inertia_;
   // Desired impedance wrench [forces, torques].T
   Vector6d impedance_wrench_;
   // Interaction wrench [forces, torques].T
   Vector6d sensor_wrench_;
+  // Interaction wrench estimation
+  Vector6d estimated_wrench_;
   // End effector pose deviation
   Vector6d pose_deviation_;
   // End effector twist deviation
@@ -235,7 +238,9 @@ private:
   Matrix6Xd jacobian_;
   Matrix6Xd jacobian_derivative_;
   Eigen::MatrixXd jacobian_pinv_;
+  Eigen::MatrixXd jacobianT_pinv_;
   Eigen::MatrixXd jsim_jpinv_;
+  Eigen::MatrixXd jsim_jpinv_dj_;
 
   // Controller Reference Subscriber
   realtime_tools::RealtimeBuffer<std::shared_ptr<ReferenceType>> rt_reference_ptr_;
