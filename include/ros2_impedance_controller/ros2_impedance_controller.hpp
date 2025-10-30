@@ -130,6 +130,12 @@ protected:
   void ph_diagnostics();
 
   /**
+   * @brief Phase space diagnostics. See method implementation
+   * for further details.
+   */
+  void phase_space_diagnostics();
+
+  /**
    * @brief Compute impedance-related port power
    */
   void compute_inout_power();

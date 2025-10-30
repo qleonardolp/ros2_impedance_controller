@@ -334,8 +334,8 @@ controller_interface::return_type ImpedanceController::update(
   compute_inout_power();  // needs desired_inertia_ updated
   compute_hamiltonian();
 
-  ph_diagnostics();
-  // zspace_diagnostics();
+  // ph_diagnostics();
+  zspace_diagnostics();
   clock_time_last_ = time;
   return controller_interface::return_type::OK;
 }
@@ -459,29 +459,8 @@ void ImpedanceController::zspace_diagnostics()
     realtime_publisher_->msg_.pose_accel.linear.y = estimated_wrench_(1);
     realtime_publisher_->msg_.pose_accel.linear.z = estimated_wrench_(2);
     realtime_publisher_->msg_.pose_accel.angular.x = estimated_wrench_(3);
-
-    robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
-      robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
-
-    // Phase space (q,p) divergence
-    realtime_publisher_->msg_.pose_accel.angular.y = -(jsim_jpinv_dj_ * robot_data_->Minv).trace();
-
-    // TODO(@qleonardolp) investigate the trace for non square matrices (nDoF < m)
-    // Eigen::DiagonalMatrix<double, Eigen::Dynamic, kCartesianSpaceDim> damping(
-    //   desired_damping_.diagonal().segment(0, degrees_of_freedom_));
-
-    if (inertia_shaping_)
-    {
-      realtime_publisher_->msg_.pose_accel.angular.z =
-        -(actual_inertia_ * desired_inertia_inv_ * desired_damping_ * jacobian_ * robot_data_->Minv)
-           .trace();
-      // -(desired_damping_ * Matrix6d::Identity() * desired_inertia_inv_).trace();
-    }
-    else
-    {
-      realtime_publisher_->msg_.pose_accel.angular.z =
-        -(desired_damping_ * jacobian_ * robot_data_->Minv).trace();
-    }
+    realtime_publisher_->msg_.pose_accel.angular.y = estimated_wrench_(4);
+    realtime_publisher_->msg_.pose_accel.angular.z = estimated_wrench_(5);
 
     realtime_publisher_->unlockAndPublish();
   }
@@ -515,6 +494,53 @@ void ImpedanceController::ph_diagnostics()
   }
 }
 
+void ImpedanceController::phase_space_diagnostics()
+{
+  if (realtime_publisher_->trylock())
+  {
+    realtime_publisher_->msg_.pose.position.x = pose_deviation_(0);
+    realtime_publisher_->msg_.pose.position.y = pose_deviation_(1);
+    realtime_publisher_->msg_.pose.position.z = pose_deviation_(2);
+    // Using the quaternion vector as the angles
+    realtime_publisher_->msg_.pose.orientation.x = pose_deviation_(3);
+    realtime_publisher_->msg_.pose.orientation.y = pose_deviation_(4);
+    realtime_publisher_->msg_.pose.orientation.z = pose_deviation_(5);
+
+    realtime_publisher_->msg_.pose_twist.linear.x = twist_deviation_(0);
+    realtime_publisher_->msg_.pose_twist.linear.y = twist_deviation_(1);
+    realtime_publisher_->msg_.pose_twist.linear.z = twist_deviation_(2);
+    realtime_publisher_->msg_.pose_twist.angular.x = twist_deviation_(3);
+    realtime_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
+    realtime_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
+
+    robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
+      robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
+
+    // Phase space (q,p) divergence
+    // First term
+    realtime_publisher_->msg_.pose_accel.linear.x = -(jsim_jpinv_dj_ * robot_data_->Minv).trace();
+
+    // TODO(@qleonardolp) investigate the trace for non square matrices (nDoF < m)
+    // Eigen::DiagonalMatrix<double, Eigen::Dynamic, kCartesianSpaceDim> damping(
+    //   desired_damping_.diagonal().segment(0, degrees_of_freedom_));
+
+    // Second term
+    if (inertia_shaping_)
+    {
+      realtime_publisher_->msg_.pose_accel.linear.y =
+        -(actual_inertia_ * desired_inertia_inv_ * desired_damping_ * jacobian_ * robot_data_->Minv)
+           .trace();
+    }
+    else
+    {
+      realtime_publisher_->msg_.pose_accel.linear.y =
+        -(desired_damping_ * jacobian_ * robot_data_->Minv).trace();
+    }
+
+    realtime_publisher_->unlockAndPublish();
+  }
+}
+
 void ImpedanceController::compute_inout_power()
 {
   // actual_accel_.noalias() =
@@ -525,7 +551,7 @@ void ImpedanceController::compute_inout_power()
 
 void ImpedanceController::compute_hamiltonian()
 {
-  // TODO(@qleonardolp): compute H with desired_inertia_ and actual_inertia_
+  // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_. See ::update()
   hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
   hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
   hamiltonian_ = 0.5 * hamiltonian_;
