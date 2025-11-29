@@ -19,6 +19,7 @@ impedance_controller:
     torque_cutoff: 500.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
+    visualize_reference: true
 
 leg_impedance_controller:
   ros__parameters:
@@ -35,3 +36,4 @@ leg_impedance_controller:
     torque_cutoff: 500.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/spot_leg.description.urdf.xacro
+    visualize_reference: true

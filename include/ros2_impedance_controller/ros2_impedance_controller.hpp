@@ -146,11 +146,6 @@ protected:
   void compute_hamiltonian();
 
   /**
-   * @brief Commands Low-pass filter alpha
-   */
-  double command_alpha(const double period);
-
-  /**
    * @brief Read simple parameters, as such link (frame) names and
    * number of joints. It also compute the inertia and damping according
    * to `taskspace_mass` and the `damping` vector if empty.
@@ -178,6 +173,8 @@ private:
 
   rclcpp::Time clock_time_last_;
   double ellapsed_time_{0};
+  // Torque low-pass filter alpha.
+  double cmd_lpf_alpha_{0.7585469929947761};
 
   /* Port-Hamiltonian variables */
   // Impedance power

@@ -174,6 +174,10 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
     return ret;
   }
 
+  // TODO(@me): get `update_rate` from the controller manager
+  // double beta = 2 * M_PI * period_ * 200;
+  // cmd_lpf_alpha_ = beta / (beta + 1);
+
   // Dynamic size members (joint space dim)
   jacobian_.setZero();
   jacobian_derivative_.setZero();
@@ -319,8 +323,8 @@ controller_interface::return_type ImpedanceController::update(
   twist_compensation_.noalias() = (robot_data_->C - jsim_jpinv_dj_) * robot_velocities_;
   effort_commands_ = accel_feedforward_ + impedance_torques_ + twist_compensation_ + robot_data_->g;
 
-  commands_filtered_ = command_alpha(ellapsed_time_) * effort_commands_ +
-                       (1.0 - command_alpha(ellapsed_time_)) * commands_filtered_;
+  commands_filtered_ =
+    cmd_lpf_alpha_ * effort_commands_ + (1.0 - cmd_lpf_alpha_) * commands_filtered_;
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
@@ -621,12 +625,6 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
     get_node()->get_logger(),
     "Damping matrix diagonal: " << desired_damping_.diagonal().transpose());
   return controller_interface::CallbackReturn::SUCCESS;
-}
-
-double ImpedanceController::command_alpha(const double period)
-{
-  return (2 * M_PI * period * params_.torque_cutoff) /
-         (2 * M_PI * period * params_.torque_cutoff + 1);
 }
 
 void ImpedanceController::configure_visualization_marker()
