@@ -630,7 +630,7 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
 void ImpedanceController::configure_visualization_marker()
 {
   marker_ = visualization_msgs::msg::Marker();
-  marker_.header.frame_id = "world";
+  marker_.header.frame_id = params_.base_link.c_str();
   marker_.ns = "impedance_controller/reference";
   marker_.id = 23;  // Random ID
   marker_.type = visualization_msgs::msg::Marker::LINE_LIST;

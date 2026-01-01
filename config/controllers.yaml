@@ -28,7 +28,7 @@ leg_impedance_controller:
       - fl_hipx
       - fl_hipy
       - fl_knee
-    base_link: body
+    base_link: leg_support
     interaction_link: fl_foot
     stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
     damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
