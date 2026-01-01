@@ -124,7 +124,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
           Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
         sensor_wrench_raw.tail<3>() =
           Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
-        const double lpf_alpha = 0.75855;  // LPF: cutoff 50, dt 0.01
+        const double lpf_alpha = 0.75854699;  // Nyquist frequency
         sensor_wrench_ = lpf_alpha * sensor_wrench_raw + (1 - lpf_alpha) * sensor_wrench_;
       });
   }
@@ -173,10 +173,6 @@ controller_interface::CallbackReturn ImpedanceController::on_activate(
   {
     return ret;
   }
-
-  // TODO(@me): get `update_rate` from the controller manager
-  // double beta = 2 * M_PI * period_ * 200;
-  // cmd_lpf_alpha_ = beta / (beta + 1);
 
   // Dynamic size members (joint space dim)
   jacobian_.setZero();
@@ -560,7 +556,8 @@ void ImpedanceController::compute_hamiltonian()
   hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
   hamiltonian_ = 0.5 * hamiltonian_;
 
-  hamiltonian_filtered_ = 0.05912 * hamiltonian_ + (1.0 - 0.05912) * hamiltonian_filtered_;
+  hamiltonian_filtered_ =
+    cmd_lpf_alpha_ * hamiltonian_ + (1.0 - cmd_lpf_alpha_) * hamiltonian_filtered_;
   hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / ellapsed_time_;
   hamiltonian_last_ = hamiltonian_filtered_;
 }

@@ -174,7 +174,8 @@ private:
   rclcpp::Time clock_time_last_;
   double ellapsed_time_{0};
   // Torque low-pass filter alpha.
-  double cmd_lpf_alpha_{0.7585469929947761};
+  // Default is half of the Nyquist frequency, or 1/4 of the sampling frequency.
+  double cmd_lpf_alpha_{0.6110154703516573};
 
   /* Port-Hamiltonian variables */
   // Impedance power
