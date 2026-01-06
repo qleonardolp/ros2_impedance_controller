@@ -37,3 +37,19 @@ leg_impedance_controller:
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/spot_leg.description.urdf.xacro
     visualize_reference: true
+
+hyl_impedance_controller:
+  ros__parameters:
+    type: ros2_impedance_controller/ImpedanceController
+    joints:
+      - hfe_joint
+      - kfe_joint
+    base_link: trunk
+    interaction_link: foot
+    stiffness: [400.0, 0.0, 800.0, 0.0, 0.0, 0.0]
+    damping: [43.0, 0.0, 90.0, 0.0, 0.0, 0.0]
+    taskspace_mass: 0.0
+    torque_cutoff: 500.0
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
+    visualize_reference: true

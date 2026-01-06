@@ -31,6 +31,12 @@ ros2 launch ros2_impedance_controller simulation.launch.py robot:=spot_leg contr
 ros2 control set_controller_state leg_impedance_controller active
 ```
 
+### Simulation with Hydraulic Leg (HyL)
+
+```bash
+ros2 launch ros2_impedance_controller simulation.launch.py robot:=hyl controller:=hyl_impedance_controller
+```
+
 ## About
 
 The controller implement the classical impedance control law, following the notation from the book _Cartesian Impedance Control of Redundant and Flexible-Joint Robots_, Ott, C., 2008. Please check the [documentation](doc/ros2_impedance_controller_documentation.pdf) for further details.
