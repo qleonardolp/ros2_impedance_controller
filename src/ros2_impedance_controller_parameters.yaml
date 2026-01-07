@@ -40,14 +40,6 @@ ros2_impedance_controller:
       gt_eq<>: [0.0]
     }
   }
-  torque_cutoff: {
-    type: double,
-    default_value: 25.0,
-    description: "Low-pass filter cutoff frequency [Hz] of the commanded efforts (torques)",
-    validation: {
-      gt_eq<>: [0.0]
-    }
-  }
   urdf_package: {
     type: string,
     default_value: "",

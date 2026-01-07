@@ -11,12 +11,11 @@ impedance_controller:
     base_link: base_link
     interaction_link: ee_link
     ft_sensor_topic: end_effector_ft_sensor
-    stiffness: [800.0, 800.0, 800.0, 120.0, 120.0, 120.0]
-    taskspace_mass: 10.0
+    stiffness: [200.0, 800.0, 800.0, 120.0, 120.0, 120.0]
+    taskspace_mass: 20.0
     # stiffness: [400.0, 400.0, 400.0, 70.0, 70.0, 40.0]  # TODO: tuning
     # damping: [134.16, 134.16, 134.16, 15.086, 15.086, 15.086]
     # taskspace_mass: 0.0
-    torque_cutoff: 500.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
     visualize_reference: true
@@ -33,7 +32,6 @@ leg_impedance_controller:
     stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
     damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
     taskspace_mass: 0.0
-    torque_cutoff: 500.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/spot_leg.description.urdf.xacro
     visualize_reference: true
@@ -49,7 +47,6 @@ hyl_impedance_controller:
     stiffness: [400.0, 0.0, 800.0, 0.0, 0.0, 0.0]
     damping: [43.0, 0.0, 90.0, 0.0, 0.0, 0.0]
     taskspace_mass: 0.0
-    torque_cutoff: 500.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
     visualize_reference: true
