@@ -1,4 +1,4 @@
-impedance_controller:
+ur5_controller:
   ros__parameters:
     type: ros2_impedance_controller/ImpedanceController
     joints:
@@ -20,7 +20,7 @@ impedance_controller:
     urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
     visualize_reference: true
 
-leg_impedance_controller:
+spot_leg_controller:
   ros__parameters:
     type: ros2_impedance_controller/ImpedanceController
     joints:
@@ -36,7 +36,7 @@ leg_impedance_controller:
     urdf_relative_path: /description/urdf/spot_leg.description.urdf.xacro
     visualize_reference: true
 
-hyl_impedance_controller:
+hyl_controller:
   ros__parameters:
     type: ros2_impedance_controller/ImpedanceController
     joints:
@@ -49,4 +49,21 @@ hyl_impedance_controller:
     taskspace_mass: 0.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
+    visualize_reference: true
+
+spot_controller:
+  ros__parameters:
+    type: ros2_impedance_controller/ImpedanceController
+    joints:
+      - fl_hipx
+      - fl_hipy
+      - fl_knee
+    base_link: body
+    interaction_link: fl_foot
+    # TBD: Whole-Body Controller
+    stiffness: [700.0, 700.0, 1000.0, 0.0, 0.0, 0.0]
+    damping: [52.0, 52.0, 63.0, 0.0, 0.0, 0.0]
+    taskspace_mass: 0.0
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/spot.description.urdf.xacro
     visualize_reference: true

@@ -18,23 +18,23 @@ ros2 launch ros2_impedance_controller simulation.launch.py
 ```
 
 ```bash
-ros2 control set_controller_state impedance_controller active
+ros2 control set_controller_state ur5_controller active
 ```
 
 ### Simulation with Spot leg
 
 ```bash
-ros2 launch ros2_impedance_controller simulation.launch.py robot:=spot_leg controller:=leg_impedance_controller
+ros2 launch ros2_impedance_controller simulation.launch.py robot:=spot_leg controller:=spot_leg_controller
 ```
 
 ```bash
-ros2 control set_controller_state leg_impedance_controller active
+ros2 control set_controller_state spot_leg_controller active
 ```
 
 ### Simulation with Hydraulic Leg (HyL)
 
 ```bash
-ros2 launch ros2_impedance_controller simulation.launch.py robot:=hyl controller:=hyl_impedance_controller
+ros2 launch ros2_impedance_controller simulation.launch.py robot:=hyl controller:=hyl_controller
 ```
 
 ## About

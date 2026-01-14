@@ -37,13 +37,13 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "robot",
             default_value="ur5",
-            description="Robot model. Options: ur5, spot, spot_leg",
+            description="Robot model. Options: ur5, spot, spot_leg, hyl",
         )
     )
     declared_arguments.append(
         DeclareLaunchArgument(
             "controller",
-            default_value="impedance_controller",
+            default_value="ur5_controller",
             description="Name of the controller. Useful to debug using the"
             + " 'forward_effort_controller' instead of the impedance controller.",
         )
