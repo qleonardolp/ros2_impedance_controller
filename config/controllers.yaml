@@ -1,4 +1,4 @@
-impedance_controller:
+ur5_controller:
   ros__parameters:
     type: ros2_impedance_controller/ImpedanceController
     joints:
@@ -11,16 +11,47 @@ impedance_controller:
     base_link: base_link
     interaction_link: ee_link
     ft_sensor_topic: end_effector_ft_sensor
-    stiffness: [800.0, 800.0, 800.0, 120.0, 120.0, 120.0]
-    taskspace_mass: 10.0
+    stiffness: [200.0, 800.0, 800.0, 120.0, 120.0, 120.0]
+    taskspace_mass: 20.0
     # stiffness: [400.0, 400.0, 400.0, 70.0, 70.0, 40.0]  # TODO: tuning
     # damping: [134.16, 134.16, 134.16, 15.086, 15.086, 15.086]
     # taskspace_mass: 0.0
-    torque_cutoff: 500.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
+    visualize_reference: true
 
-leg_impedance_controller:
+spot_leg_controller:
+  ros__parameters:
+    type: ros2_impedance_controller/ImpedanceController
+    joints:
+      - fl_hipx
+      - fl_hipy
+      - fl_knee
+    base_link: leg_support
+    interaction_link: fl_foot
+    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
+    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
+    taskspace_mass: 0.0
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/spot_leg.description.urdf.xacro
+    visualize_reference: true
+
+hyl_controller:
+  ros__parameters:
+    type: ros2_impedance_controller/ImpedanceController
+    joints:
+      - hfe_joint
+      - kfe_joint
+    base_link: trunk
+    interaction_link: foot
+    stiffness: [400.0, 0.0, 800.0, 0.0, 0.0, 0.0]
+    damping: [43.0, 0.0, 90.0, 0.0, 0.0, 0.0]
+    taskspace_mass: 0.0
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
+    visualize_reference: true
+
+spot_controller:
   ros__parameters:
     type: ros2_impedance_controller/ImpedanceController
     joints:
@@ -29,9 +60,10 @@ leg_impedance_controller:
       - fl_knee
     base_link: body
     interaction_link: fl_foot
-    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
-    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
+    # TBD: Whole-Body Controller
+    stiffness: [700.0, 700.0, 1000.0, 0.0, 0.0, 0.0]
+    damping: [52.0, 52.0, 63.0, 0.0, 0.0, 0.0]
     taskspace_mass: 0.0
-    torque_cutoff: 500.0
     urdf_package: ros2_descriptions
-    urdf_relative_path: /description/urdf/spot_leg.description.urdf.xacro
+    urdf_relative_path: /description/urdf/spot.description.urdf.xacro
+    visualize_reference: true

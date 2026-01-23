@@ -49,7 +49,7 @@ typedef Eigen::Matrix<double, Eigen::Dynamic, 1, 0, kMaxJointSpaceDim, 1> Vector
 const Vector6d kDefaultInertia(0.000220625, 0.00256287, 0.00588485, 3.82715, 10.2802, 131.032);
 
 // Default damping ratio
-const double kDampingRatio = 0.75;
+const double kDampingRatio = 1.00;
 
 /**
  * \brief Cartesian impedance controller for articulated robots.
@@ -130,6 +130,12 @@ protected:
   void ph_diagnostics();
 
   /**
+   * @brief Phase space diagnostics. See method implementation
+   * for further details.
+   */
+  void phase_space_diagnostics();
+
+  /**
    * @brief Compute impedance-related port power
    */
   void compute_inout_power();
@@ -138,11 +144,6 @@ protected:
    * @brief Compute Cartesian impedance Hamiltonian function
    */
   void compute_hamiltonian();
-
-  /**
-   * @brief Commands Low-pass filter alpha
-   */
-  double command_alpha(const double period);
 
   /**
    * @brief Read simple parameters, as such link (frame) names and
@@ -172,6 +173,8 @@ private:
 
   rclcpp::Time clock_time_last_;
   double ellapsed_time_{0};
+  // Torque low-pass filter alpha for Nyquist frequency.
+  double cmd_lpf_alpha_{0.7585469929947761};
 
   /* Port-Hamiltonian variables */
   // Impedance power

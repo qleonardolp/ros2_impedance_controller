@@ -124,7 +124,7 @@ controller_interface::CallbackReturn ImpedanceController::on_configure(
           Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
         sensor_wrench_raw.tail<3>() =
           Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
-        const double lpf_alpha = 0.75855;  // LPF: cutoff 50, dt 0.01
+        const double lpf_alpha = 0.75854699;  // Nyquist frequency
         sensor_wrench_ = lpf_alpha * sensor_wrench_raw + (1 - lpf_alpha) * sensor_wrench_;
       });
   }
@@ -319,8 +319,8 @@ controller_interface::return_type ImpedanceController::update(
   twist_compensation_.noalias() = (robot_data_->C - jsim_jpinv_dj_) * robot_velocities_;
   effort_commands_ = accel_feedforward_ + impedance_torques_ + twist_compensation_ + robot_data_->g;
 
-  commands_filtered_ = command_alpha(ellapsed_time_) * effort_commands_ +
-                       (1.0 - command_alpha(ellapsed_time_)) * commands_filtered_;
+  commands_filtered_ =
+    cmd_lpf_alpha_ * effort_commands_ + (1.0 - cmd_lpf_alpha_) * commands_filtered_;
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
@@ -459,29 +459,8 @@ void ImpedanceController::zspace_diagnostics()
     realtime_publisher_->msg_.pose_accel.linear.y = estimated_wrench_(1);
     realtime_publisher_->msg_.pose_accel.linear.z = estimated_wrench_(2);
     realtime_publisher_->msg_.pose_accel.angular.x = estimated_wrench_(3);
-
-    robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
-      robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
-
-    // Phase space (q,p) divergence
-    realtime_publisher_->msg_.pose_accel.angular.y = -(jsim_jpinv_dj_ * robot_data_->Minv).trace();
-
-    // TODO(@qleonardolp) investigate the trace for non square matrices (nDoF < m)
-    // Eigen::DiagonalMatrix<double, Eigen::Dynamic, kCartesianSpaceDim> damping(
-    //   desired_damping_.diagonal().segment(0, degrees_of_freedom_));
-
-    if (inertia_shaping_)
-    {
-      realtime_publisher_->msg_.pose_accel.angular.z =
-        -(actual_inertia_ * desired_inertia_inv_ * desired_damping_ * jacobian_ * robot_data_->Minv)
-           .trace();
-      // -(desired_damping_ * Matrix6d::Identity() * desired_inertia_inv_).trace();
-    }
-    else
-    {
-      realtime_publisher_->msg_.pose_accel.angular.z =
-        -(desired_damping_ * jacobian_ * robot_data_->Minv).trace();
-    }
+    realtime_publisher_->msg_.pose_accel.angular.y = estimated_wrench_(4);
+    realtime_publisher_->msg_.pose_accel.angular.z = estimated_wrench_(5);
 
     realtime_publisher_->unlockAndPublish();
   }
@@ -515,6 +494,53 @@ void ImpedanceController::ph_diagnostics()
   }
 }
 
+void ImpedanceController::phase_space_diagnostics()
+{
+  if (realtime_publisher_->trylock())
+  {
+    realtime_publisher_->msg_.pose.position.x = pose_deviation_(0);
+    realtime_publisher_->msg_.pose.position.y = pose_deviation_(1);
+    realtime_publisher_->msg_.pose.position.z = pose_deviation_(2);
+    // Using the quaternion vector as the angles
+    realtime_publisher_->msg_.pose.orientation.x = pose_deviation_(3);
+    realtime_publisher_->msg_.pose.orientation.y = pose_deviation_(4);
+    realtime_publisher_->msg_.pose.orientation.z = pose_deviation_(5);
+
+    realtime_publisher_->msg_.pose_twist.linear.x = twist_deviation_(0);
+    realtime_publisher_->msg_.pose_twist.linear.y = twist_deviation_(1);
+    realtime_publisher_->msg_.pose_twist.linear.z = twist_deviation_(2);
+    realtime_publisher_->msg_.pose_twist.angular.x = twist_deviation_(3);
+    realtime_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
+    realtime_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
+
+    robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
+      robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
+
+    // Phase space (q,p) divergence
+    // First term
+    realtime_publisher_->msg_.pose_accel.linear.x = -(jsim_jpinv_dj_ * robot_data_->Minv).trace();
+
+    // TODO(@qleonardolp) investigate the trace for non square matrices (nDoF < m)
+    // Eigen::DiagonalMatrix<double, Eigen::Dynamic, kCartesianSpaceDim> damping(
+    //   desired_damping_.diagonal().segment(0, degrees_of_freedom_));
+
+    // Second term
+    if (inertia_shaping_)
+    {
+      realtime_publisher_->msg_.pose_accel.linear.y =
+        -(actual_inertia_ * desired_inertia_inv_ * desired_damping_ * jacobian_ * robot_data_->Minv)
+           .trace();
+    }
+    else
+    {
+      realtime_publisher_->msg_.pose_accel.linear.y =
+        -(desired_damping_ * jacobian_ * robot_data_->Minv).trace();
+    }
+
+    realtime_publisher_->unlockAndPublish();
+  }
+}
+
 void ImpedanceController::compute_inout_power()
 {
   // actual_accel_.noalias() =
@@ -525,12 +551,13 @@ void ImpedanceController::compute_inout_power()
 
 void ImpedanceController::compute_hamiltonian()
 {
-  // TODO(@qleonardolp): compute H with desired_inertia_ and actual_inertia_
+  // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_. See ::update()
   hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
   hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
   hamiltonian_ = 0.5 * hamiltonian_;
 
-  hamiltonian_filtered_ = 0.05912 * hamiltonian_ + (1.0 - 0.05912) * hamiltonian_filtered_;
+  hamiltonian_filtered_ =
+    cmd_lpf_alpha_ * hamiltonian_ + (1.0 - cmd_lpf_alpha_) * hamiltonian_filtered_;
   hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / ellapsed_time_;
   hamiltonian_last_ = hamiltonian_filtered_;
 }
@@ -597,16 +624,10 @@ controller_interface::CallbackReturn ImpedanceController::read_parameters()
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
-double ImpedanceController::command_alpha(const double period)
-{
-  return (2 * M_PI * period * params_.torque_cutoff) /
-         (2 * M_PI * period * params_.torque_cutoff + 1);
-}
-
 void ImpedanceController::configure_visualization_marker()
 {
   marker_ = visualization_msgs::msg::Marker();
-  marker_.header.frame_id = "world";
+  marker_.header.frame_id = params_.base_link.c_str();
   marker_.ns = "impedance_controller/reference";
   marker_.id = 23;  // Random ID
   marker_.type = visualization_msgs::msg::Marker::LINE_LIST;
