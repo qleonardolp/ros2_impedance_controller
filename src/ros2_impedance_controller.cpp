@@ -334,8 +334,8 @@ controller_interface::return_type ImpedanceController::update(
   compute_inout_power();  // needs desired_inertia_ updated
   compute_hamiltonian();
 
-  // ph_diagnostics();
-  zspace_diagnostics();
+  ph_diagnostics();
+  // zspace_diagnostics();
   clock_time_last_ = time;
   return controller_interface::return_type::OK;
 }
