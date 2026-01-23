@@ -55,10 +55,20 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
   ros2_impedance_controller_parameters
+  Eigen3::Eigen
   pinocchio::pinocchio
+  ament_index_cpp::ament_index_cpp
+  controller_interface::controller_interface
+  hardware_interface::hardware_interface
+  realtime_tools::realtime_tools
+  pluginlib::pluginlib
+  rclcpp::rclcpp
+  rclcpp_lifecycle::rclcpp_lifecycle
+  ${kinematic_pose_msgs_TARGETS}
+  ${visualization_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
 )
 
-ament_target_dependencies(${PROJECT_NAME} PUBLIC ${DEPENDENCIES})
 pluginlib_export_plugin_description_file(controller_interface ros2_impedance_controller.xml)
 
 install(
