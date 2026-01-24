@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ros2_impedance_controller VERSION 1.2.0 LANGUAGES CXX)
+project(ros2_impedance_controller VERSION 2.0.0 LANGUAGES CXX)
 
 find_package(ros2_control_cmake REQUIRED)
 set_compiler_options()  # Set compiler according to ROS2 standard
@@ -23,6 +23,7 @@ set(DEPENDENCIES
   pluginlib
   rclcpp
   rclcpp_lifecycle
+  std_msgs
   geometry_msgs
   visualization_msgs
   kinematic_pose_msgs
@@ -36,17 +37,16 @@ foreach(Dependency IN ITEMS ${DEPENDENCIES})
 endforeach()
 
 generate_parameter_library(
-  ros2_impedance_controller_parameters
-  src/ros2_impedance_controller_parameters.yaml
+  cartesian_controller_parameters
+  src/cartesian_controller_parameters.yaml
 )
 
-add_library(${PROJECT_NAME} SHARED src/ros2_impedance_controller.cpp)
+add_library(${PROJECT_NAME} SHARED
+  src/impedance_controller_base.cpp
+  src/cartesian_controller.cpp
+)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
-target_precompile_headers(
-  ${PROJECT_NAME} PRIVATE
-  include/ros2_impedance_controller/ros2_impedance_controller_pch.hpp
-)
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
@@ -54,7 +54,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
-  ros2_impedance_controller_parameters
+  cartesian_controller_parameters
   Eigen3::Eigen
   pinocchio::pinocchio
   ament_index_cpp::ament_index_cpp
@@ -67,6 +67,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   ${kinematic_pose_msgs_TARGETS}
   ${visualization_msgs_TARGETS}
   ${geometry_msgs_TARGETS}
+  ${std_msgs_TARGETS}
 )
 
 pluginlib_export_plugin_description_file(controller_interface ros2_impedance_controller.xml)
@@ -79,7 +80,7 @@ install(
 install(
   TARGETS
     ros2_impedance_controller
-    ros2_impedance_controller_parameters
+    cartesian_controller_parameters
   EXPORT export_ros2_impedance_controller
   RUNTIME DESTINATION bin
   ARCHIVE DESTINATION lib

@@ -1,6 +1,6 @@
 ur5_controller:
   ros__parameters:
-    type: ros2_impedance_controller/ImpedanceController
+    type: ros2_impedance_controller/CartesianController
     joints:
       - shoulder_pan_joint
       - shoulder_lift_joint
@@ -22,7 +22,7 @@ ur5_controller:
 
 spot_leg_controller:
   ros__parameters:
-    type: ros2_impedance_controller/ImpedanceController
+    type: ros2_impedance_controller/CartesianController
     joints:
       - fl_hipx
       - fl_hipy
@@ -38,7 +38,7 @@ spot_leg_controller:
 
 hyl_controller:
   ros__parameters:
-    type: ros2_impedance_controller/ImpedanceController
+    type: ros2_impedance_controller/CartesianController
     joints:
       - hfe_joint
       - kfe_joint
@@ -53,7 +53,7 @@ hyl_controller:
 
 spot_controller:
   ros__parameters:
-    type: ros2_impedance_controller/ImpedanceController
+    type: ros2_impedance_controller/CartesianController
     joints:
       - fl_hipx
       - fl_hipy

@@ -1,6 +1,6 @@
 <library path="ros2_impedance_controller">
-  <class name="ros2_impedance_controller/ImpedanceController"
-         type="ros2_impedance_controller::ImpedanceController"
+  <class name="ros2_impedance_controller/CartesianController"
+         type="ros2_impedance_controller::CartesianController"
          base_class_type="controller_interface::ControllerInterface">
   <description>
     Robot impedance controller designed with the ros2_controllers framework and Pinocchio.

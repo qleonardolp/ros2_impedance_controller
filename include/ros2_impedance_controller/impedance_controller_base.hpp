@@ -40,33 +40,36 @@
 #include "rclcpp/subscription.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 #include "realtime_tools/realtime_thread_safe_box.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
+
+// TODO(@me): remove the param class from here
+#include "ros2_impedance_controller/ros2_impedance_controller_parameters.hpp"
 
 namespace ros2_impedance_controller
 {
 using ReferenceType = kinematic_pose_msgs::msg::KinematicPose;
 
-const uint8_t kCartesianSpaceDim = 6;
+const uint8_t kCartesianDim = 6;
 
-using DiagonalMatrix6d = Eigen::DiagonalMatrix<double, kCartesianSpaceDim>;
-using Vector6d = Eigen::Matrix<double, kCartesianSpaceDim, 1>;
-using Matrix6d = Eigen::Matrix<double, kCartesianSpaceDim, kCartesianSpaceDim>;
+using DiagonalMatrix6d = Eigen::DiagonalMatrix<double, kCartesianDim>;
+using Vector6d = Eigen::Matrix<double, kCartesianDim, 1>;
+using Matrix6d = Eigen::Matrix<double, kCartesianDim, kCartesianDim>;
 
-const uint8_t kMaxJointSpaceDim = 12;  // avoiding dynamic memory allocation
+const uint8_t kMaxJointSpaceDim = 48;  // avoiding dynamic memory allocation
 
-typedef Eigen::Matrix<
-  double, kCartesianSpaceDim, Eigen::Dynamic, 0, kCartesianSpaceDim, kMaxJointSpaceDim>
+typedef Eigen::Matrix<double, kCartesianDim, Eigen::Dynamic, 0, kCartesianDim, kMaxJointSpaceDim>
   Matrix6Xd;
 typedef Eigen::Matrix<double, Eigen::Dynamic, 1, 0, kMaxJointSpaceDim, 1> VectorXd;
-
-// Task space generalized inertia matrix eigenvalues
-const Vector6d kDefaultInertia(0.000220625, 0.00256287, 0.00588485, 3.82715, 10.2802, 131.032);
 
 // Default damping ratio
 const double kDampingRatio = 1.00;
 
 /**
- * \brief Cartesian impedance controller for articulated robots.
+ * \brief Cartesian impedance controllers base class for articulated robots.
+ *
+ * This class defines the minimal functionality for ros2_control
+ * Cartesian impedance controllers. Claim only effort command interfaces.
  */
 class ImpedanceControllerBase : public controller_interface::ControllerInterface
 {
@@ -86,9 +89,6 @@ public:
   controller_interface::CallbackReturn on_configure(
     const rclcpp_lifecycle::State & previous_state) override;
 
-  controller_interface::CallbackReturn on_cleanup(
-    const rclcpp_lifecycle::State & previous_state) override;
-
   controller_interface::CallbackReturn on_activate(
     const rclcpp_lifecycle::State & previous_state) override;
 
@@ -99,6 +99,59 @@ public:
     const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
 protected:
+  /**
+   * Derived controllers have to declare parameters in this method.
+   */
+  virtual void declare_parameters() = 0;
+
+  /**
+   * Derived controllers have to read parameters in this method and set `joint_names_`
+   * variable and `has_effort_states_` variable. These variables are then used to propagate
+   * the state and command interfaces configuration to controller manager.
+   *
+   * \returns controller_interface::CallbackReturn::SUCCESS if parameters are successfully read and
+   * their values are allowed, controller_interface::CallbackReturn::ERROR otherwise.
+   */
+  virtual controller_interface::CallbackReturn read_parameters() = 0;
+
+  /**
+   * @brief Compute and update effort commands (control action).
+   *
+   * Before call this method, base class update robot states: `robot_positions_`,
+   * `robot_velocities_`, `robot_accelerations_`, and `robot_efforts_` (if available).
+   * Robot geometric Jacobian, kinematic deviations, and `reference_` are also updated.
+   *
+   * In the end, this method must write on `effort_commands_`.
+   */
+  virtual controller_interface::CallbackReturn update_effort_commands() = 0;
+
+  /**
+   * @brief Derived controllers can implement a status publication with this method.
+   * Publisher `status_publisher_` message type is std_msgs::msg::Float64MultiArray.
+   */
+  virtual void publish_status() = 0;
+
+  virtual void tailored_configuration() = 0;
+
+  virtual void tailored_activation() = 0;
+
+  /**
+   * @brief Update the robot data while running the controller.
+   * State interfaces are fetch and the Forward Kinematics is computed.
+   */
+  bool update_robot();
+
+  /**
+   * @brief Update the end-effector pose and twist deviations (errors), and Jacobian.
+   *
+   * The position part is simply the reference minus the state.
+   * The orientation part is computed using Lie algebra (pinocchio::log3),
+   * free of gimbal lock errors. Twist deviation is =
+   * desired_twist - \f$ J(q)*\dot{q} \f$. This method also updates
+   * desired_pose_accel_.
+   */
+  void update_deviation_and_reference();
+
   /**
    * @brief Configure the internal robot model from the URDF available in the
    * parameter server ('robot_description'). In this way the URDF parsed by the
@@ -111,65 +164,45 @@ protected:
   bool configure_robot_model();
 
   /**
-   * @brief Update the robot data while running the controller.
-   * State interfaces are fetch and the Forward Kinematics is computed.
+   * @brief Configure reference marker (visualization_msgs::msg::Marker)
+   * to be visualized on rviz.
    */
-  bool update_robot();
-
-  /**
-   * @brief Update the end-effector pose and twist deviations (errors).
-   * The position part is simply the reference minus the state.
-   * The orientation part is computed using Lie algebra (pinocchio::log3),
-   * free of gimbal lock errors. Twist deviation is =
-   * desired_twist - \f$ J(q)*\dot{q} \f$. This method also updates
-   * desired_pose_accel_.
-   */
-  void update_deviations();
-
-  /**
-   * @brief Impedance space diagnostics with pose_deviation_, twist_deviation_,
-   * and interaction wrench estimation. Publisher reuse the KinematicPose type.
-   */
-  virtual void diagnostics() = 0;
-
-  /**
-   * @brief Read simple parameters, as such link (frame) names and
-   * number of joints.
-   */
-  virtual controller_interface::CallbackReturn read_parameters() = 0;
-
-  std::shared_ptr<ParamListener> param_listener_;
-  Params params_;
-
-private:
   void configure_visualization_marker();
 
-  std::vector<const hardware_interface::LoanedStateInterface *> position_interfaces_;
-  std::vector<const hardware_interface::LoanedStateInterface *> velocity_interfaces_;
-  std::vector<const hardware_interface::LoanedStateInterface *> effort_interfaces_;
-  std::vector<hardware_interface::LoanedCommandInterface *> effort_command_interfaces_;
+  size_t get_dof();
 
-  bool has_effort_states_{true};
-  bool inertia_shaping_{false};
-  bool debug_logger_{true};
+  // Parameter defined members
+  // These class members must be set through parameters.
+  std::vector<std::string> joint_names_;
+  std::string end_effector_link_name_;
+  std::string base_link_name_;
+  std::string urdf_package_;
+  std::string urdf_relative_path_;
+  bool has_effort_states_{false};
+  bool visualize_reference_{false};
+  // End of parameter defined members
 
-  std::string base_link_;
-  std::string interaction_link_;
-  size_t degrees_of_freedom_{1};
-
-  rclcpp::Time clock_time_last_;
-  double ellapsed_time_{0};
   // Torque low-pass filter alpha for Nyquist frequency.
   double cmd_lpf_alpha_{0.7585469929947761};
 
-  /* Port-Hamiltonian variables */
-  // Impedance power
-  double impedance_power_{0};
-  // Impedance Hamiltonian function value
-  double hamiltonian_{0};
-  double hamiltonian_last_{0};
-  double hamiltonian_filtered_{0};
-  double hamiltonian_derivative_{0};
+  rclcpp::Time clock_time_last_;
+  double delta_t_{0};
+
+  // Impedance reference subscriber
+  rclcpp::Subscription<ReferenceType>::SharedPtr reference_subscriber_;
+
+  // TODO(@qleonardolp): update realtime containers
+  // https://github.com/ros-controls/ros2_controllers/pull/1935
+  realtime_tools::RealtimeThreadSafeBox<ReferenceType> rt_reference_;
+  // Impedance reference
+  ReferenceType reference_;
+
+  // Controller status publisher. Useful for control analysis, logging or debug.
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr status_publisher_;
+
+  // Publisher for reference visualization
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
+  visualization_msgs::msg::Marker marker_;
 
   pinocchio::Model robot_model_;
   std::shared_ptr<pinocchio::Data> robot_data_;
@@ -185,25 +218,20 @@ private:
   Matrix6d desired_inertia_;
   // Operational space inertia matrix (osim)
   Matrix6d actual_inertia_;
-  // Desired impedance wrench [forces, torques].T
-  Vector6d impedance_wrench_;
-  // Interaction wrench [forces, torques].T
-  Vector6d sensor_wrench_;
-  // Interaction wrench estimation
-  Vector6d estimated_wrench_;
-  // End effector pose deviation
-  Vector6d pose_deviation_;
-  // End effector twist deviation
-  Vector6d twist_deviation_;
 
-  // update_deviations variables (task space)
-  ReferenceType desired_kpose_;
+  // Joint to task space geometric Jacobian
+  Matrix6Xd jacobian_;
+
+  // Task space variables
   Vector6d actual_pose_;
   Vector6d actual_twist_;
   Vector6d actual_accel_;
   Vector6d desired_twist_;
-  Eigen::Vector3d desired_position_;
+  Vector6d desired_pose_accel_;  // Desired end effector twist derivative
   Eigen::Quaterniond desired_quaternion_;
+  Eigen::Vector3d desired_position_;
+  Vector6d pose_deviation_;   // End effector pose deviation
+  Vector6d twist_deviation_;  // End effector twist deviation
 
   // Joint space state vectors
   VectorXd robot_positions_;
@@ -212,28 +240,20 @@ private:
   VectorXd robot_accelerations_;
   VectorXd robot_efforts_;
 
-  // Controller effort command vector (joint space)
+  // Controller command vector (joint space)
   VectorXd effort_commands_;
-  VectorXd commands_filtered_;
 
-  Matrix6Xd jacobian_;
+private:
+  // Position state interfaces
+  std::vector<const hardware_interface::LoanedStateInterface *> position_interfaces_;
+  // Velocity state interfaces
+  std::vector<const hardware_interface::LoanedStateInterface *> velocity_interfaces_;
+  // Effort state interfaces
+  std::vector<const hardware_interface::LoanedStateInterface *> effort_interfaces_;
+  // Effort command interfaces
+  std::vector<hardware_interface::LoanedCommandInterface *> effort_command_interfaces_;
 
-  // Controller Reference Subscriber
-  realtime_tools::RealtimeThreadSafeBox<ReferenceType> rt_reference_;
-  // TODO(@qleonardolp): update realtime containers
-  // https://github.com/ros-controls/ros2_controllers/pull/1935
-  rclcpp::Subscription<ReferenceType>::SharedPtr reference_subscriber_;
-
-  // Interaction force subscriber
-  rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr interaction_subscriber_;
-
-  // Deviation, deviation derivative and interaction wrench publisher (for impedance space)
-  // Interaction wrench goes on the accel field, replacing accelerations by forces and torques.
-  rclcpp::Publisher<ReferenceType>::SharedPtr status_publisher_;
-
-  // Publisher for reference visualization
-  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
-  visualization_msgs::msg::Marker marker_;
+  size_t degrees_of_freedom_{1};
 };
 
 }  // namespace ros2_impedance_controller

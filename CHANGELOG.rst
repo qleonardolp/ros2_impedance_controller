@@ -2,6 +2,12 @@
 Changelog for package ros2_impedance_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.0.0 (2026-02-13)
+------------------
+* Refact controller with a base class
+* Add controllers variants with derived classes
+* Add MPC-based impedance controller
+
 1.2.0 (2025-10-01)
 ------------------
 * Fix ``twist_compensation_`` term
