@@ -38,7 +38,7 @@ spot_leg_controller:
 
 hyl_controller:
   ros__parameters:
-    type: ros2_impedance_controller/CartesianController
+    type: ros2_impedance_controller/BasicCartesianController
     joints:
       - hfe_joint
       - kfe_joint
@@ -46,7 +46,6 @@ hyl_controller:
     interaction_link: foot
     stiffness: [400.0, 0.0, 800.0, 0.0, 0.0, 0.0]
     damping: [43.0, 0.0, 90.0, 0.0, 0.0, 0.0]
-    taskspace_mass: 0.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
     visualize_reference: true

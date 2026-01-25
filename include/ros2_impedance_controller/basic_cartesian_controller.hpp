@@ -1,4 +1,4 @@
-// Copyright (c) 2025, qleonardolp
+// Copyright (c) 2026, qleonardolp
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef ROS2_IMPEDANCE_CONTROLLER__CARTESIAN_CONTROLLER_HPP_
-#define ROS2_IMPEDANCE_CONTROLLER__CARTESIAN_CONTROLLER_HPP_
+#ifndef ROS2_IMPEDANCE_CONTROLLER__BASIC_CARTESIAN_CONTROLLER_HPP_
+#define ROS2_IMPEDANCE_CONTROLLER__BASIC_CARTESIAN_CONTROLLER_HPP_
 
 #include <memory>
 
@@ -24,12 +24,13 @@
 namespace ros2_impedance_controller
 {
 /**
- * \brief Cartesian impedance controller for articulated robots.
+ * \brief Basic Cartesian impedance controller with only
+ * gravity compensation and PD impedance.
  */
-class CartesianController : public ImpedanceControllerBase
+class BasicCartesianController : public ImpedanceControllerBase
 {
 public:
-  CartesianController();
+  BasicCartesianController();
 
 protected:
   void declare_parameters() override;
@@ -72,14 +73,7 @@ protected:
   std::shared_ptr<::cartesian_controller::ParamListener> param_listener_;
   ::cartesian_controller::Params params_;
 
-  // Interaction force/torque subscriber
-  rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr int_subscriber_;
-
-  bool inertia_shaping_;
-
   /* Port-Hamiltonian variables */
-  // Impedance power
-  double impedance_power_{0};
   // Impedance Hamiltonian function value
   double hamiltonian_{0};
   double hamiltonian_last_{0};
@@ -90,24 +84,18 @@ protected:
 
   // Desired impedance wrench [forces, torques].T
   Vector6d impedance_wrench_;
-  // Interaction wrench [forces, torques].T
-  Vector6d sensor_wrench_;
   // Interaction wrench estimation
   Vector6d estimated_wrench_;
 
   // Command terms
-  VectorXd twist_compensation_;
   VectorXd accel_feedforward_;
-  VectorXd impedance_torques_;
   VectorXd tau_desired_;
 
-  Matrix6Xd jacobian_derivative_;
   Eigen::MatrixXd jacobian_pinv_;
   Eigen::MatrixXd jacobianT_pinv_;
-  Eigen::MatrixXd jsim_jpinv_dj_;
   Eigen::MatrixXd jsim_jpinv_;
 };
 
 }  // namespace ros2_impedance_controller
 
-#endif  // ROS2_IMPEDANCE_CONTROLLER__CARTESIAN_CONTROLLER_HPP_
+#endif  // ROS2_IMPEDANCE_CONTROLLER__BASIC_CARTESIAN_CONTROLLER_HPP_
