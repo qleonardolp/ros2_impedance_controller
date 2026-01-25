@@ -91,31 +91,29 @@ controller_interface::CallbackReturn CartesianController::read_parameters()
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
-void CartesianController::tailored_configuration()
+void CartesianController::custom_configuration()
 {
-  /*
-    auto qos_lowlatency = rclcpp::QoS(1);
-    qos_lowlatency.best_effort().durability_volatile();
-    qos_lowlatency.liveliness(RMW_QOS_POLICY_LIVELINESS_AUTOMATIC);
+  auto qos_lowlatency = rclcpp::QoS(1);
+  qos_lowlatency.best_effort().durability_volatile();
+  qos_lowlatency.liveliness(RMW_QOS_POLICY_LIVELINESS_AUTOMATIC);
 
-    sensor_wrench_.setZero();
-    if (!params_.ft_sensor_topic.empty())
-    {
-      interaction_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Wrench>(
-        params_.ft_sensor_topic, qos_lowlatency,
-        [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
-        {
-          // TODO(@qleonardolp): compensate the sensor weight
-          Vector6d sensor_wrench_raw;
-          sensor_wrench_raw.head<3>() =
-            Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
-          sensor_wrench_raw.tail<3>() =
-            Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
-          const double lpf_alpha = 0.75854699;  // Nyquist frequency
-          sensor_wrench_ = lpf_alpha * sensor_wrench_raw + (1 - lpf_alpha) * sensor_wrench_;
-        });
-    }
-  */
+  sensor_wrench_.setZero();
+  if (!params_.ft_sensor_topic.empty())
+  {
+    int_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::Wrench>(
+      params_.ft_sensor_topic, qos_lowlatency,
+      [this](const geometry_msgs::msg::Wrench::SharedPtr wrench)
+      {
+        Vector6d sensor_wrench_raw;
+        sensor_wrench_raw.head<3>() =
+          Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
+        sensor_wrench_raw.tail<3>() =
+          Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
+        sensor_wrench_ = cmd_lpf_alpha_ * sensor_wrench_raw + (1 - cmd_lpf_alpha_) * sensor_wrench_;
+      });
+  }
+
+  status_msg_.data.resize(18, 0.0);
   // Initialize dynamic Eigen members
   tau_desired_.resize(get_dof());
   twist_compensation_.resize(get_dof());
@@ -128,14 +126,14 @@ void CartesianController::tailored_configuration()
   jsim_jpinv_dj_ = Eigen::MatrixXd::Zero(get_dof(), get_dof());
 }
 
-void CartesianController::tailored_activation()
+void CartesianController::custom_activation()
 {
   // Dynamic size members (joint space dim)
   jacobian_derivative_.setZero();
-  tau_desired_.setZero();
   twist_compensation_.setZero();
   accel_feedforward_.setZero();
   impedance_torques_.setZero();
+  tau_desired_.setZero();
 
   impedance_wrench_.setZero();
   estimated_wrench_.setZero();
@@ -151,7 +149,10 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
 
-  estimated_wrench_.noalias() = jacobianT_pinv_ * (robot_efforts_ - effort_commands_);
+  if (has_effort_states_)
+  {
+    estimated_wrench_.noalias() = jacobianT_pinv_ * (robot_efforts_ - effort_commands_);
+  }
 
   pinocchio::getFrameJacobianTimeVariation(
     robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
@@ -176,7 +177,7 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
   else
   {
     impedance_torques_.noalias() = jacobian_.transpose() * impedance_wrench_;
-    desired_inertia_ = actual_inertia_;
+    desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
   }
 
   accel_feedforward_ = jsim_jpinv_ * desired_pose_accel_;
@@ -185,132 +186,109 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
 
   effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
 
-  compute_inout_power();  // needs desired_inertia_ updated
   compute_hamiltonian();
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
-void CartesianController::publish_status() {}
+void CartesianController::publish_status()
+{
+  // Robot Hamiltonian - Impedance Hamiltonian
+  status_msg_.data[0] = robot_data_->mechanical_energy - hamiltonian_filtered_;
+  // Commands input power
+  status_msg_.data[1] = robot_velocities_.transpose() * effort_commands_;
+  // Interaction power using F/T Sensor (ground truth)
+  status_msg_.data[2] = actual_twist_.transpose() * sensor_wrench_;
+  // Impedance Hamiltonian
+  status_msg_.data[3] = hamiltonian_filtered_;
+  // Impedance Hamiltonian derivative
+  status_msg_.data[4] = hamiltonian_derivative_;
+  // Impedance I/O power
+  status_msg_.data[5] = twist_deviation_.transpose() * impedance_wrench_;
+
+  actual_pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
+  status_msg_.data[6] = actual_pose_(0);
+  status_msg_.data[7] = actual_pose_(1);
+  status_msg_.data[8] = actual_pose_(2);
+
+  status_rt_publisher_->try_publish(status_msg_);
+}
 
 void CartesianController::zspace_diagnostics()
 {
   /*
-    if (realtime_publisher_->trylock())
+    if (status_rt_publisher_->trylock())
     {
-      realtime_publisher_->msg_.pose.position.x = pose_deviation_(0);
-      realtime_publisher_->msg_.pose.position.y = pose_deviation_(1);
-      realtime_publisher_->msg_.pose.position.z = pose_deviation_(2);
+      status_rt_publisher_->msg_.pose.position.x = pose_deviation_(0);
+      status_rt_publisher_->msg_.pose.position.y = pose_deviation_(1);
+      status_rt_publisher_->msg_.pose.position.z = pose_deviation_(2);
       // Using the quaternion vector as the angles
-      realtime_publisher_->msg_.pose.orientation.x = pose_deviation_(3);
-      realtime_publisher_->msg_.pose.orientation.y = pose_deviation_(4);
-      realtime_publisher_->msg_.pose.orientation.z = pose_deviation_(5);
+      status_rt_publisher_->msg_.pose.orientation.x = pose_deviation_(3);
+      status_rt_publisher_->msg_.pose.orientation.y = pose_deviation_(4);
+      status_rt_publisher_->msg_.pose.orientation.z = pose_deviation_(5);
 
-      realtime_publisher_->msg_.pose_twist.linear.x = twist_deviation_(0);
-      realtime_publisher_->msg_.pose_twist.linear.y = twist_deviation_(1);
-      realtime_publisher_->msg_.pose_twist.linear.z = twist_deviation_(2);
-      realtime_publisher_->msg_.pose_twist.angular.x = twist_deviation_(3);
-      realtime_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
-      realtime_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
+      status_rt_publisher_->msg_.pose_twist.linear.x = twist_deviation_(0);
+      status_rt_publisher_->msg_.pose_twist.linear.y = twist_deviation_(1);
+      status_rt_publisher_->msg_.pose_twist.linear.z = twist_deviation_(2);
+      status_rt_publisher_->msg_.pose_twist.angular.x = twist_deviation_(3);
+      status_rt_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
+      status_rt_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
 
-      realtime_publisher_->msg_.pose_accel.linear.x = estimated_wrench_(0);
-      realtime_publisher_->msg_.pose_accel.linear.y = estimated_wrench_(1);
-      realtime_publisher_->msg_.pose_accel.linear.z = estimated_wrench_(2);
-      realtime_publisher_->msg_.pose_accel.angular.x = estimated_wrench_(3);
-      realtime_publisher_->msg_.pose_accel.angular.y = estimated_wrench_(4);
-      realtime_publisher_->msg_.pose_accel.angular.z = estimated_wrench_(5);
+      status_rt_publisher_->msg_.pose_accel.linear.x = estimated_wrench_(0);
+      status_rt_publisher_->msg_.pose_accel.linear.y = estimated_wrench_(1);
+      status_rt_publisher_->msg_.pose_accel.linear.z = estimated_wrench_(2);
+      status_rt_publisher_->msg_.pose_accel.angular.x = estimated_wrench_(3);
+      status_rt_publisher_->msg_.pose_accel.angular.y = estimated_wrench_(4);
+      status_rt_publisher_->msg_.pose_accel.angular.z = estimated_wrench_(5);
 
-      realtime_publisher_->unlockAndPublish();
-    }
-  */
-}
-
-void CartesianController::ph_diagnostics()
-{
-  /*
-    if (realtime_publisher_->trylock())
-    {
-      // Robot Hamiltonian - Impedance Hamiltonian
-      realtime_publisher_->msg_.pose_twist.linear.x =
-        robot_data_->mechanical_energy - hamiltonian_filtered_;
-      // Commands input power
-      realtime_publisher_->msg_.pose_twist.linear.y =
-        robot_velocities_.transpose() * commands_filtered_;
-      // Interaction power using F/T Sensor (ground truth)
-      realtime_publisher_->msg_.pose_twist.linear.z = actual_twist_.transpose() * sensor_wrench_;
-      // Impedance Hamiltonian
-      realtime_publisher_->msg_.pose_twist.angular.x = hamiltonian_filtered_;
-      // Impedance Hamiltonian derivative
-      realtime_publisher_->msg_.pose_twist.angular.y = hamiltonian_derivative_;
-      // Impedance I/O power
-      realtime_publisher_->msg_.pose_twist.angular.z = impedance_power_;
-
-      actual_pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
-      realtime_publisher_->msg_.pose.position.x = actual_pose_(0);
-      realtime_publisher_->msg_.pose.position.y = actual_pose_(1);
-      realtime_publisher_->msg_.pose.position.z = actual_pose_(2);
-
-      realtime_publisher_->unlockAndPublish();
+      status_rt_publisher_->unlockAndPublish();
     }
   */
 }
 
 void CartesianController::phase_space_diagnostics()
 {
-  /*
-    if (realtime_publisher_->trylock())
-    {
-      realtime_publisher_->msg_.pose.position.x = pose_deviation_(0);
-      realtime_publisher_->msg_.pose.position.y = pose_deviation_(1);
-      realtime_publisher_->msg_.pose.position.z = pose_deviation_(2);
-      // Using the quaternion vector as the angles
-      realtime_publisher_->msg_.pose.orientation.x = pose_deviation_(3);
-      realtime_publisher_->msg_.pose.orientation.y = pose_deviation_(4);
-      realtime_publisher_->msg_.pose.orientation.z = pose_deviation_(5);
+  status_msg_.data[0] = pose_deviation_(0);
+  status_msg_.data[1] = pose_deviation_(1);
+  status_msg_.data[2] = pose_deviation_(2);
+  // Using the quaternion vector as the angles
+  status_msg_.data[3] = pose_deviation_(3);
+  status_msg_.data[4] = pose_deviation_(4);
+  status_msg_.data[5] = pose_deviation_(5);
 
-      realtime_publisher_->msg_.pose_twist.linear.x = twist_deviation_(0);
-      realtime_publisher_->msg_.pose_twist.linear.y = twist_deviation_(1);
-      realtime_publisher_->msg_.pose_twist.linear.z = twist_deviation_(2);
-      realtime_publisher_->msg_.pose_twist.angular.x = twist_deviation_(3);
-      realtime_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
-      realtime_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
+  status_msg_.data[6] = twist_deviation_(0);
+  status_msg_.data[7] = twist_deviation_(1);
+  status_msg_.data[8] = twist_deviation_(2);
+  status_msg_.data[9] = twist_deviation_(3);
+  status_msg_.data[10] = twist_deviation_(4);
+  status_msg_.data[11] = twist_deviation_(5);
 
-      robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
-        robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
+  robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
+    robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
 
-      // Phase space (q,p) divergence
-      // First term
-      realtime_publisher_->msg_.pose_accel.linear.x = -(jsim_jpinv_dj_ * robot_data_->Minv).trace();
+  // Phase space (q,p) divergence
+  // First term:
+  status_msg_.data[12] = -(jsim_jpinv_dj_ * robot_data_->Minv).trace();
 
-      // TODO(@qleonardolp) investigate the trace for non square matrices (nDoF < m)
-      // Eigen::DiagonalMatrix<double, Eigen::Dynamic, kCartesianDim> damping(
-      //   desired_damping_.diagonal().segment(0, get_dof()));
+  // TODO(@qleonardolp) investigate the trace for non square matrices (nDoF < m)
+  // Eigen::DiagonalMatrix<double, Eigen::Dynamic, kCartesianDim> damping(
+  //   desired_damping_.diagonal().segment(0, get_dof()));
 
-      // Second term
-      if (inertia_shaping_)
-      {
-        realtime_publisher_->msg_.pose_accel.linear.y =
-          -(actual_inertia_ * desired_inertia_inv_ * desired_damping_ * jacobian_ *
-    robot_data_->Minv) .trace();
-      }
-      else
-      {
-        realtime_publisher_->msg_.pose_accel.linear.y =
-          -(desired_damping_ * jacobian_ * robot_data_->Minv).trace();
-      }
-
-      realtime_publisher_->unlockAndPublish();
-    }
-  */
-}
-
-void CartesianController::compute_inout_power()
-{
-  impedance_power_ = twist_deviation_.transpose() * impedance_wrench_;
+  // Second term:
+  if (inertia_shaping_)
+  {
+    status_msg_.data[13] =
+      -(actual_inertia_ * desired_inertia_inv_ * desired_damping_ * jacobian_ * robot_data_->Minv)
+         .trace();
+  }
+  else
+  {
+    status_msg_.data[13] = -(desired_damping_ * jacobian_ * robot_data_->Minv).trace();
+  }
 }
 
 void CartesianController::compute_hamiltonian()
 {
-  // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_. See ::update()
+  // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_.
   hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
   hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
   hamiltonian_ = 0.5 * hamiltonian_;

@@ -40,11 +40,9 @@ protected:
 
   controller_interface::CallbackReturn update_effort_commands() override;
 
-  void tailored_configuration() override;
+  void custom_configuration() override;
 
-  void tailored_activation() override;
-
-  void publish_status() override;
+  void custom_activation() override;
 
   /**
    * @brief Port-Hamiltonian diagnostics with:
@@ -55,7 +53,7 @@ protected:
    * 5. Impedance Hamiltonian I/O power;
    * 6. Model-based interaction power.
    */
-  void ph_diagnostics();
+  void publish_status() override;
 
   /**
    * @brief Impedance space diagnostics with pose_deviation_, twist_deviation_,
@@ -69,17 +67,15 @@ protected:
   void phase_space_diagnostics();
 
   /**
-   * @brief Compute impedance-related port power
-   */
-  void compute_inout_power();
-
-  /**
    * @brief Compute Cartesian impedance Hamiltonian function
    */
   void compute_hamiltonian();
 
   std::shared_ptr<::cartesian_controller::ParamListener> param_listener_;
   ::cartesian_controller::Params params_;
+
+  // Interaction force/torque subscriber
+  rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr int_subscriber_;
 
   bool inertia_shaping_;
 

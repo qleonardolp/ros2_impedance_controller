@@ -16,6 +16,7 @@
 #define ROS2_IMPEDANCE_CONTROLLER__IMPEDANCE_CONTROLLER_BASE_HPP_
 
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -39,12 +40,10 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/subscription.hpp"
 #include "rclcpp_lifecycle/state.hpp"
+#include "realtime_tools/realtime_publisher.hpp"
 #include "realtime_tools/realtime_thread_safe_box.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
-
-// TODO(@me): remove the param class from here
-#include "ros2_impedance_controller/ros2_impedance_controller_parameters.hpp"
 
 namespace ros2_impedance_controller
 {
@@ -131,9 +130,15 @@ protected:
    */
   virtual void publish_status() = 0;
 
-  virtual void tailored_configuration() = 0;
+  /**
+   * @brief Derived controller custom configuration, called in on_configure().
+   */
+  virtual void custom_configuration() = 0;
 
-  virtual void tailored_activation() = 0;
+  /**
+   * @brief Derived controller custom activation, called in on_activate().
+   */
+  virtual void custom_activation() = 0;
 
   /**
    * @brief Update the robot data while running the controller.
@@ -199,6 +204,9 @@ protected:
 
   // Controller status publisher. Useful for control analysis, logging or debug.
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr status_publisher_;
+  std::unique_ptr<realtime_tools::RealtimePublisher<std_msgs::msg::Float64MultiArray>>
+    status_rt_publisher_;
+  std_msgs::msg::Float64MultiArray status_msg_;
 
   // Publisher for reference visualization
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;

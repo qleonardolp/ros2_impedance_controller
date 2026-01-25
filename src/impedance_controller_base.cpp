@@ -67,6 +67,10 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_configure(
   status_publisher_ =
     get_node()->create_publisher<std_msgs::msg::Float64MultiArray>("~/status", qos_lowlatency);
 
+  status_rt_publisher_ =
+    std::make_unique<realtime_tools::RealtimePublisher<std_msgs::msg::Float64MultiArray>>(
+      status_publisher_);
+
   if (visualize_reference_)
   {
     configure_visualization_marker();
@@ -102,7 +106,7 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_configure(
   effort_commands_.resize(degrees_of_freedom_);
   jacobian_ = Matrix6Xd::Zero(kCartesianDim, degrees_of_freedom_);
 
-  tailored_configuration();
+  custom_configuration();
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -200,7 +204,7 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
     }
   }
   // Reset reference buffer...
-  tailored_activation();
+  custom_activation();
 
   RCLCPP_WARN(logger, "Activated successfully!");
 
@@ -215,6 +219,8 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_deactivate(
   position_interfaces_.clear();
   velocity_interfaces_.clear();
   effort_interfaces_.clear();
+
+  status_rt_publisher_->stop();
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -308,9 +314,17 @@ void ImpedanceControllerBase::update_deviation_and_reference()
 
   actual_twist_.noalias() = jacobian_ * robot_velocities_;
 
+  double position_norm1_ = 0;
   auto ref_optional = rt_reference_.try_get();
 
   if (ref_optional.has_value())
+  {
+    reference_ = ref_optional.value();
+    position_norm1_ = abs(reference_.pose.position.x) + abs(reference_.pose.position.y) +
+                      abs(reference_.pose.position.z);
+  }
+
+  if (ref_optional.has_value() && position_norm1_ > std::numeric_limits<double>::epsilon())
   {
     reference_ = ref_optional.value();
 
