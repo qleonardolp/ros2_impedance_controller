@@ -42,6 +42,7 @@ generate_parameter_library(
 )
 
 add_library(${PROJECT_NAME} SHARED
+  src/taskspace_predictor.cpp
   src/impedance_controller_base.cpp
   src/basic_cartesian_controller.cpp
   src/cartesian_controller.cpp

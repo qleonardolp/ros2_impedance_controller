@@ -45,17 +45,13 @@
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 
+#include "ros2_impedance_controller/common_definitions.hpp"
+
 namespace ros2_impedance_controller
 {
 using ReferenceType = kinematic_pose_msgs::msg::KinematicPose;
 
-const uint8_t kCartesianDim = 6;
-
-using DiagonalMatrix6d = Eigen::DiagonalMatrix<double, kCartesianDim>;
-using Vector6d = Eigen::Matrix<double, kCartesianDim, 1>;
-using Matrix6d = Eigen::Matrix<double, kCartesianDim, kCartesianDim>;
-
-const uint8_t kMaxJointSpaceDim = 48;  // avoiding dynamic memory allocation
+const uint8_t kMaxJointSpaceDim = 48;  // avoid dynamic memory allocation
 
 typedef Eigen::Matrix<double, kCartesianDim, Eigen::Dynamic, 0, kCartesianDim, kMaxJointSpaceDim>
   Matrix6Xd;
