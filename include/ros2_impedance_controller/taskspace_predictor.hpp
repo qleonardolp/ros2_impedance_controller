@@ -50,6 +50,11 @@ public:
   TaskspacePredictor(double timestep, uint horizon, std::string ee_frame, pinocchio::Model robot);
 
   /**
+   * @brief Class destructor
+   */
+  ~TaskspacePredictor();
+
+  /**
    * @brief Prediction method. Run forward dynamics (ABA)
    * and integrate velocities up to the horizon.
    *
@@ -59,10 +64,7 @@ public:
    */
   void predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::VectorXd tau);
 
-  /**
-   * @brief Class destructor
-   */
-  ~TaskspacePredictor();
+  Eigen::VectorXd get_positions();
 
 private:
   double timestep_;
@@ -80,6 +82,10 @@ private:
   Eigen::VectorXd robot_dq_;   // joint velocities
   Eigen::VectorXd robot_ddq_;  // joint acceleration
   Eigen::VectorXd zero_tau_;   // zero torque vector
+
+  Eigen::VectorXd robot_Q_;  // joint configuration over the horizon
+
+  size_t dof_;
 };
 
 }  // namespace ros2_impedance_controller
