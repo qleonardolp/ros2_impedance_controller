@@ -75,6 +75,7 @@ protected:
   ::cartesian_controller::Params params_;
 
   std::shared_ptr<TaskspacePredictor> predictor_;
+  bool debug_{true};
 
   /* Port-Hamiltonian variables */
   // Impedance Hamiltonian function value

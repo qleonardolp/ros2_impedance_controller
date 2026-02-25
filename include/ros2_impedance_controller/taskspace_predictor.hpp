@@ -19,10 +19,10 @@
 #include <string>
 #include <vector>
 
-#include "pinocchio/algorithm/aba.hpp"
-#include "pinocchio/algorithm/compute-all-terms.hpp"
+#include "pinocchio/algorithm/aba.hpp"     // compute joint accelerations
+#include "pinocchio/algorithm/crba.hpp"    // compute joint space inertia
 #include "pinocchio/algorithm/frames.hpp"  // computeFrameJacobian
-#include "pinocchio/parsers/urdf.hpp"      // ::urdf::buildModelFromXML
+#include "pinocchio/algorithm/rnea.hpp"    // compute non linear terms (C, g)
 
 #include "ros2_impedance_controller/common_definitions.hpp"
 
@@ -64,19 +64,71 @@ public:
    */
   void predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::VectorXd tau);
 
+  /**
+   * @brief Get Jacobian `stack` over the horizon
+   */
+  Eigen::MatrixXd get_Jn();
+
+  /**
+   * @brief Get Coriolis `stack` over the horizon
+   */
+  Eigen::MatrixXd get_Cn();
+
   Eigen::VectorXd get_positions();
 
 private:
+  /**
+   * @brief update the robot geometric Jacobian: J(q)
+   */
+  void update_jacobian();
+
+  /**
+   * @brief update task space Coriolis matrix (\f$ \Omega(x, dx) \f$)
+   */
+  void update_coriolis();
+
+  /**
+   * @brief assemble the Jacobian horizon `stack`
+   *
+   * @param n  horizon time step
+   */
+  void assemble_Jn(std::size_t n);
+
+  /**
+   * @brief assemble the task space Coriolis horizon `stack`
+   *
+   * @param n  horizon time step
+   */
+  void assemble_Cn(std::size_t n);
+
+  /**
+   * @brief update joint space inertia matrix. Pinocchio
+   * only fills the upper triangular half of this matrix
+   */
+  void update_inertia();
+
   double timestep_;
   uint horizon_;
   pinocchio::Model robot_;
   pinocchio::FrameIndex ee_frame_;  // end effector frame
   std::shared_ptr<pinocchio::Data> data_;
 
-  // Operational space inertia matrix (osim)
-  Matrix6d actual_inertia_;
+  // Task space inertia matrix (osim)
+  Matrix6d task_inertia_;
+
+  // Task space Coriolis
+  Matrix6d task_coriolis_;
 
   Eigen::MatrixXd jacobian_;
+  Eigen::MatrixXd jacobian_inv_;
+  Eigen::MatrixXd jacobianT_inv_;
+  Eigen::MatrixXd jacobian_dt_;  // Jacobian derivative
+
+  Eigen::MatrixXd jacobianN_;  // Jacobian `stack` over the horizon
+  Eigen::MatrixXd coriolisN_;  // Task Coriolis `stack` over the horizon
+
+  Eigen::MatrixXd Ak_;  // State space transition matrix
+  Eigen::MatrixXd Bk_;  // State space input matrix
 
   Eigen::VectorXd robot_q_;    // joint configuration
   Eigen::VectorXd robot_dq_;   // joint velocities
@@ -86,6 +138,8 @@ private:
   Eigen::VectorXd robot_Q_;  // joint configuration over the horizon
 
   size_t dof_;
+
+  bool debug_{true};
 };
 
 }  // namespace ros2_impedance_controller

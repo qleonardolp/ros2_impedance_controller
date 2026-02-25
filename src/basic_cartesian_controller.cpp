@@ -102,6 +102,12 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
 
   predictor_->predict(robot_positions_, robot_velocities_, effort_commands_);
 
+  if (debug_)
+  {
+    RCLCPP_INFO_STREAM(get_node()->get_logger(), "Cn: " << predictor_->get_Cn());
+    debug_ = false;
+  }
+
   if (has_effort_states_)
   {
     estimated_wrench_.noalias() = jacobianT_pinv_ * (robot_efforts_ - effort_commands_);
