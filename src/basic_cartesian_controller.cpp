@@ -100,7 +100,7 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
 
-  predictor_->predict(robot_positions_, robot_velocities_, effort_commands_);
+  predictor_->predict(robot_positions_, robot_velocities_, robot_efforts_);
 
   if (debug_)
   {
@@ -150,9 +150,9 @@ void BasicCartesianController::publish_status()
   status_msg_.data[5] = twist_deviation_.transpose() * impedance_wrench_;
 
   actual_pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
-  status_msg_.data[6] = predictor_->get_positions()(0);  // actual_pose_(0);
-  status_msg_.data[7] = predictor_->get_positions()(2);  // actual_pose_(1);
-  status_msg_.data[8] = predictor_->get_positions()(4);  // actual_pose_(2);
+  status_msg_.data[6] = actual_pose_(0);
+  status_msg_.data[7] = actual_pose_(1);
+  status_msg_.data[8] = actual_pose_(2);
 
   status_rt_publisher_->try_publish(status_msg_);
 }

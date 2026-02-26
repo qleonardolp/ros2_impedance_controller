@@ -28,6 +28,8 @@
 
 namespace ros2_impedance_controller
 {
+const uint8_t kStateSpaceDim = kCartesianDim * 2;
+
 /**
  * \brief Task space dynamics predictor to support Model Predictive Cartesian Impedance Control.
  *
@@ -74,6 +76,18 @@ public:
    */
   Eigen::MatrixXd get_Cn();
 
+  /**
+   * @brief Get state transition matrix over the horizon.
+   * F dimensions: 12*`N` x 12
+   */
+  Eigen::MatrixXd get_F_matrix();
+
+  /**
+   * @brief Get input matrix over the horizon.
+   * G dimensions: 12*`N` x DoF*`N`
+   */
+  Eigen::MatrixXd get_G_matrix();
+
   Eigen::VectorXd get_positions();
 
 private:
@@ -86,6 +100,12 @@ private:
    * @brief update task space Coriolis matrix (\f$ \Omega(x, dx) \f$)
    */
   void update_coriolis();
+
+  /**
+   * @brief update joint space inertia matrix. Pinocchio
+   * only fills the upper triangular half of this matrix
+   */
+  void update_inertia();
 
   /**
    * @brief assemble the Jacobian horizon `stack`
@@ -102,10 +122,33 @@ private:
   void assemble_Cn(std::size_t n);
 
   /**
-   * @brief update joint space inertia matrix. Pinocchio
-   * only fills the upper triangular half of this matrix
+   * @brief update state space transition matrix
+   *
+   * @param n  horizon time step
    */
-  void update_inertia();
+  void update_Ak(std::size_t n);
+
+  /**
+   * @brief update state space input matrix
+   *
+   * @param n  horizon time step
+   */
+  void update_Bk(std::size_t n);
+
+  /**
+   * @brief assemble G matrix. This matrix stack the
+   * system input from x_0 to x_{N-1}. The matrix is
+   * lower triangular, but is not Toeplitz-shaped
+   * because the system is time-varying.
+   */
+  void assemble_G();
+
+  /**
+   * @brief assemble F matrix. This matrix stack the
+   * state transition from a initial state x_0 up to
+   * x_{N-1} in the state space representation.
+   */
+  void assemble_F();
 
   double timestep_;
   uint horizon_;
@@ -129,6 +172,12 @@ private:
 
   Eigen::MatrixXd Ak_;  // State space transition matrix
   Eigen::MatrixXd Bk_;  // State space input matrix
+
+  std::vector<Eigen::MatrixXd> AN_;  // State space A_k array over the horizon
+  std::vector<Eigen::MatrixXd> BN_;  // State space B_k array over the horizon
+
+  Eigen::MatrixXd F_;  // State space transition stack
+  Eigen::MatrixXd G_;  // State space input stack
 
   Eigen::VectorXd robot_q_;    // joint configuration
   Eigen::VectorXd robot_dq_;   // joint velocities

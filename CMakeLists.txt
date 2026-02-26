@@ -31,6 +31,7 @@ set(DEPENDENCIES
 
 find_package(ament_cmake REQUIRED)
 find_package(backward_ros REQUIRED)
+find_package(qpOASES REQUIRED)
 
 foreach(Dependency IN ITEMS ${DEPENDENCIES})
   find_package(${Dependency} REQUIRED)
@@ -70,6 +71,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   ${visualization_msgs_TARGETS}
   ${geometry_msgs_TARGETS}
   ${std_msgs_TARGETS}
+  qpOASES
 )
 
 pluginlib_export_plugin_description_file(controller_interface ros2_impedance_controller.xml)
@@ -96,5 +98,5 @@ if(BUILD_TESTING)
 endif()
 
 ament_export_targets(export_ros2_impedance_controller HAS_LIBRARY_TARGET)
-ament_export_dependencies(${DEPENDENCIES})
+ament_export_dependencies(${DEPENDENCIES} qpOASES)
 ament_package()

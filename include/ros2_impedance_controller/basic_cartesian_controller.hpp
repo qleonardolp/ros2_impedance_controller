@@ -16,6 +16,7 @@
 #define ROS2_IMPEDANCE_CONTROLLER__BASIC_CARTESIAN_CONTROLLER_HPP_
 
 #include <memory>
+#include <qpOASES.hpp>
 
 #include "ros2_impedance_controller/impedance_controller_base.hpp"
 #include "ros2_impedance_controller/taskspace_predictor.hpp"
@@ -75,7 +76,9 @@ protected:
   ::cartesian_controller::Params params_;
 
   std::shared_ptr<TaskspacePredictor> predictor_;
-  bool debug_{true};
+  bool debug_{false};
+
+  std::shared_ptr<qpOASES::QProblem> mpc_qp_problem_;
 
   /* Port-Hamiltonian variables */
   // Impedance Hamiltonian function value
