@@ -188,7 +188,7 @@ private:
 
   size_t dof_;
 
-  bool debug_{true};
+  bool debug_{false};
 };
 
 }  // namespace ros2_impedance_controller

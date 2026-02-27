@@ -50,6 +50,14 @@ mpcic_controller:
       bounds<>: [1, 50]
     }
   }
+  torque_max: {
+    type: double,
+    default_value: 200.0,
+    description: "Actuators maximum torque. The MPC use this value as constraint.",
+    validation: {
+      gt<>: [0.0]
+    }
+  }
   ft_sensor_topic: {
     type: string,
     default_value: "",

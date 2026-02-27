@@ -31,9 +31,9 @@ Build and install:
 
   ```bash
   mkdir build && cd build
-  cmake ..
-  cmake --build .
-  sudo cmake --install .
+  cmake .. -D CMAKE_CXX_FLAGS="-fPIC"
+  make
+  sudo make install
   ```
 
 ## Instructions

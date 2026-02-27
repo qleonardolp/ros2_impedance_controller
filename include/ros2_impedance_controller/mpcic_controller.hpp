@@ -25,6 +25,10 @@
 
 namespace ros2_impedance_controller
 {
+// Dynamic size row-major storage Eigen matrix,
+// easing qpOASES C-style access to matrices. Use m.data()
+typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXr;
+
 /**
  * \brief Model Predictive Cartesian Impedance Controller.
  *
@@ -71,13 +75,29 @@ protected:
   std::shared_ptr<::mpcic_controller::ParamListener> param_listener_;
   ::mpcic_controller::Params params_;
 
-  double timestep_;
-  uint8_t horizon_;
-
   std::shared_ptr<TaskspacePredictor> predictor_;
   bool debug_{false};
 
-  std::shared_ptr<qpOASES::QProblem> mpc_qp_problem_;
+  double timestep_;
+  uint8_t horizon_;
+  // Online active-set strategy for QPs with varying matrices
+  std::shared_ptr<qpOASES::SQProblem> sqproblem_;
+  qpOASES::Options sqp_options_;  // QP Options
+  qpOASES::returnValue sqp_ret_;  // QP return value
+  int sqp_status_;                // QP simple status (see docs)
+  int constraints_dim_;           // constraints space dimension (nC): DoF
+  int action_dim_;                // action space dimension (nV): DoF*N
+
+  MatrixXr H_qp_;    // QP Hessian matrix
+  MatrixXr g_qp_;    // QP gradient vector
+  MatrixXr A_qp_;    // QP constraint matrix
+  MatrixXr lb_qp_;   // QP lower bound vector
+  MatrixXr ub_qp_;   // QP upper bound vector
+  MatrixXr lbA_qp_;  // QP lower constraints' bound vector
+  MatrixXr ubA_qp_;  // QP upper constraints' bound vector
+  int max_wsr_;      // QP max number of working set recalculations
+
+  MatrixXr Q_weight_;  // cost function norm weight matrix
 
   /* Port-Hamiltonian variables */
   // Impedance Hamiltonian function value
@@ -92,12 +112,10 @@ protected:
   Vector6d estimated_wrench_;
 
   // Command terms
-  VectorXd accel_feedforward_;
   VectorXd tau_desired_;
 
   Eigen::MatrixXd jacobian_pinv_;
   Eigen::MatrixXd jacobianT_pinv_;
-  Eigen::MatrixXd jsim_jpinv_;
 };
 
 }  // namespace ros2_impedance_controller

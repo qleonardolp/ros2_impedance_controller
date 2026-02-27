@@ -76,19 +76,37 @@ void MPCIController::custom_configuration()
   status_msg_.data.resize(18, 0.0);
   // Initialize dynamic Eigen members
   tau_desired_.resize(get_dof());
-  accel_feedforward_.resize(get_dof());
   jacobian_pinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
   jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
-  jsim_jpinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
 
   predictor_ = std::make_shared<TaskspacePredictor>(
     timestep_, horizon_, end_effector_link_name_, robot_model_);
+
+  constraints_dim_ = static_cast<int>(get_dof());
+  action_dim_ = constraints_dim_ * horizon_;
+  max_wsr_ = 10;
+
+  // Instantiate and configure SQProblem class ptr:
+  sqproblem_ = std::make_shared<qpOASES::SQProblem>(action_dim_, constraints_dim_);
+  sqp_options_.printLevel = qpOASES::PrintLevel::PL_NONE;
+  sqp_options_.setToMPC();  // options to minimum solution time
+  sqproblem_->setOptions(sqp_options_);
+
+  // Initialize QP Eigen members:
+  H_qp_ = Eigen::MatrixXd::Identity(action_dim_, action_dim_);
+  A_qp_ = Eigen::MatrixXd::Zero(constraints_dim_, action_dim_);
+  g_qp_ = Eigen::MatrixXd::Zero(1, action_dim_);
+  // action space bounds:
+  ub_qp_ = Eigen::MatrixXd::Ones(1, action_dim_) * params_.torque_max;
+  lb_qp_ = -ub_qp_;
+  // Set constant matrices:
+  A_qp_.block(0, 0, get_dof(), get_dof()) = Eigen::MatrixXd::Identity(get_dof(), get_dof());
+  Q_weight_ = Eigen::MatrixXd::Identity(kCartesianDim * horizon_, kCartesianDim * horizon_);
 }
 
 void MPCIController::custom_activation()
 {
   // Dynamic size members (joint space dim)
-  accel_feedforward_.setZero();
   tau_desired_.setZero();
 
   impedance_wrench_.setZero();
@@ -97,20 +115,19 @@ void MPCIController::custom_activation()
   // PH related
   hamiltonian_filtered_ = 0.0;
   hamiltonian_last_ = 0.0;
+
+  // QP initialization
+  sqp_ret_ = sqproblem_->init(
+    H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), robot_efforts_.data(),
+    robot_efforts_.data(), max_wsr_, &timestep_);
+
+  RCLCPP_INFO(get_node()->get_logger(), "QP init status: %d", qpOASES::getSimpleStatus(sqp_ret_));
 }
 
 controller_interface::CallbackReturn MPCIController::update_effort_commands()
 {
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
-
-  predictor_->predict(robot_positions_, robot_velocities_, robot_efforts_);
-
-  if (debug_)
-  {
-    RCLCPP_INFO_STREAM(get_node()->get_logger(), "Cn: " << predictor_->get_Cn());
-    debug_ = false;
-  }
 
   if (has_effort_states_)
   {
@@ -119,18 +136,30 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
 
   robot_data_->M.triangularView<Eigen::StrictlyLower>() =
     robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
-  jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
-
-  actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
-
-  impedance_wrench_.noalias() =
-    (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
-
+  actual_inertia_ = jacobianT_pinv_ * robot_data_->M * jacobian_pinv_;
   desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
 
-  accel_feedforward_ = jsim_jpinv_ * desired_pose_accel_;
-  tau_desired_.noalias() =
-    jacobian_.transpose() * impedance_wrench_ + accel_feedforward_ + robot_data_->g;
+  predictor_->predict(robot_positions_, robot_velocities_, robot_efforts_);
+
+  // TODO(@me): Matrices assembly goes here
+
+  if (debug_)
+  {
+    RCLCPP_INFO_STREAM(get_node()->get_logger(), "Cn: " << predictor_->get_Cn());
+    debug_ = false;
+  }
+
+  // Solve SQProblem
+  sqp_ret_ = sqproblem_->hotstart(
+    H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), robot_efforts_.data(),
+    robot_efforts_.data(), max_wsr_, &timestep_);
+  sqp_status_ = qpOASES::getSimpleStatus(sqp_ret_);
+
+  // impedance_wrench_.noalias() =
+  //   (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
+
+  // resolve the QP solution to an eigen vector with only the first horizon step
+  // tau_desired_.noalias() = robot_data_->g;
 
   effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
 
