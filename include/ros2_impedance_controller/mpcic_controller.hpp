@@ -72,11 +72,20 @@ protected:
    */
   void compute_hamiltonian();
 
+  /**
+   * @brief assemble the `L` horizon `stack`
+   */
+  void assemble_Ln();
+
+  void update_Ln(Eigen::MatrixXd Cn);
+
+  void update_Hqp(Eigen::MatrixXd G, Eigen::MatrixXd J);
+
   std::shared_ptr<::mpcic_controller::ParamListener> param_listener_;
   ::mpcic_controller::Params params_;
 
   std::shared_ptr<TaskspacePredictor> predictor_;
-  bool debug_{false};
+  bool debug_{true};
 
   double timestep_;
   uint8_t horizon_;
@@ -88,16 +97,28 @@ protected:
   int constraints_dim_;           // constraints space dimension (nC): DoF
   int action_dim_;                // action space dimension (nV): DoF*N
 
-  MatrixXr H_qp_;    // QP Hessian matrix
-  MatrixXr g_qp_;    // QP gradient vector
-  MatrixXr A_qp_;    // QP constraint matrix
-  MatrixXr lb_qp_;   // QP lower bound vector
-  MatrixXr ub_qp_;   // QP upper bound vector
-  MatrixXr lbA_qp_;  // QP lower constraints' bound vector
-  MatrixXr ubA_qp_;  // QP upper constraints' bound vector
-  int max_wsr_;      // QP max number of working set recalculations
+  MatrixXr H_qp_;      // QP Hessian matrix
+  MatrixXr g_qp_;      // QP gradient vector
+  MatrixXr A_qp_;      // QP constraint matrix
+  MatrixXr lb_qp_;     // QP lower bound vector
+  MatrixXr ub_qp_;     // QP upper bound vector
+  MatrixXr lbA_qp_;    // QP lower constraints' bound vector
+  MatrixXr ubA_qp_;    // QP upper constraints' bound vector
+  int nWSR_;           // QP max number of working set recalculations (nWSR)
+  int nWSR_qp_;        // QP WSR for in place output in `hotstart` method
+  double cputime_;     // QP maximum allowed CPU time in seconds
+  double cputime_qp_;  // CPU time spent for QP solution (or to perform nWSR iterations)
 
-  MatrixXr Q_weight_;  // cost function norm weight matrix
+  /**
+   * @note Cost function is: min_{u} (V*u + b)^T * Q * (V*u + b),
+   * where:
+   * b := L*F*x_0 - Z*x_{d} - J*g(q)
+   * V := L*G + J
+   */
+
+  Eigen::MatrixXd V_qp_;  // V multiplies `u` in the cost function
+  Eigen::MatrixXd L_qp_;  // action space projection along the horizon
+  Eigen::MatrixXd Q_qp_;  // cost function norm weight matrix
 
   /* Port-Hamiltonian variables */
   // Impedance Hamiltonian function value

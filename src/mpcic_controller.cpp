@@ -52,6 +52,7 @@ controller_interface::CallbackReturn MPCIController::read_parameters()
 
   // MPC specific:
   timestep_ = params_.timestep;
+  cputime_ = timestep_ / 2;  // 50% timestep margin
   horizon_ = static_cast<uint8_t>(params_.horizon);
 
   if (params_.stiffness.empty())
@@ -84,12 +85,12 @@ void MPCIController::custom_configuration()
 
   constraints_dim_ = static_cast<int>(get_dof());
   action_dim_ = constraints_dim_ * horizon_;
-  max_wsr_ = 10;
+  nWSR_ = 5 * (action_dim_ + constraints_dim_);  // TODO(@qleonardolp): validate s.o.t.a. Ref
 
   // Instantiate and configure SQProblem class ptr:
   sqproblem_ = std::make_shared<qpOASES::SQProblem>(action_dim_, constraints_dim_);
-  sqp_options_.printLevel = qpOASES::PrintLevel::PL_NONE;
   sqp_options_.setToMPC();  // options to minimum solution time
+  sqp_options_.printLevel = qpOASES::PrintLevel::PL_NONE;
   sqproblem_->setOptions(sqp_options_);
 
   // Initialize QP Eigen members:
@@ -99,9 +100,12 @@ void MPCIController::custom_configuration()
   // action space bounds:
   ub_qp_ = Eigen::MatrixXd::Ones(1, action_dim_) * params_.torque_max;
   lb_qp_ = -ub_qp_;
+
+  V_qp_ = Eigen::MatrixXd::Zero(kCartesianDim * horizon_, action_dim_);
+  L_qp_ = Eigen::MatrixXd::Zero(kCartesianDim * horizon_, kStateSpaceDim * horizon_);
   // Set constant matrices:
   A_qp_.block(0, 0, get_dof(), get_dof()) = Eigen::MatrixXd::Identity(get_dof(), get_dof());
-  Q_weight_ = Eigen::MatrixXd::Identity(kCartesianDim * horizon_, kCartesianDim * horizon_);
+  Q_qp_ = Eigen::MatrixXd::Identity(kCartesianDim * horizon_, kCartesianDim * horizon_);
 }
 
 void MPCIController::custom_activation()
@@ -116,16 +120,27 @@ void MPCIController::custom_activation()
   hamiltonian_filtered_ = 0.0;
   hamiltonian_last_ = 0.0;
 
+  assemble_Ln();
+
   // QP initialization
+  int init_nWSR = 10;
   sqp_ret_ = sqproblem_->init(
     H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), robot_efforts_.data(),
-    robot_efforts_.data(), max_wsr_, &timestep_);
+    robot_efforts_.data(), init_nWSR);
 
-  RCLCPP_INFO(get_node()->get_logger(), "QP init status: %d", qpOASES::getSimpleStatus(sqp_ret_));
+  // sqp_status_ = qpOASES::getSimpleStatus(sqp_ret_);
+  RCLCPP_INFO(
+    get_node()->get_logger(), "QP init status: %i, with nWSR=%i, cputime=%.4f",
+    static_cast<int>(sqp_ret_), nWSR_, cputime_);
 }
 
 controller_interface::CallbackReturn MPCIController::update_effort_commands()
 {
+  // hotstart method output the taken nWSR and cputime values in place.
+  // Then we must reset those values at every loop iteration
+  cputime_qp_ = cputime_;
+  nWSR_qp_ = nWSR_;
+
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
 
@@ -142,18 +157,26 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
   predictor_->predict(robot_positions_, robot_velocities_, robot_efforts_);
 
   // TODO(@me): Matrices assembly goes here
+  update_Ln(predictor_->get_Cn());
+  update_Hqp(predictor_->get_G_matrix(), predictor_->get_Jn());
 
   if (debug_)
   {
-    RCLCPP_INFO_STREAM(get_node()->get_logger(), "Cn: " << predictor_->get_Cn());
+    RCLCPP_INFO_STREAM(
+      get_node()->get_logger(), "H_qp: " << std::fixed << std::setprecision(3) << H_qp_);
     debug_ = false;
   }
 
   // Solve SQProblem
+  if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED)
+  {  // Previous iteration failed. maybe H_qp_ is not positive (semi-)definite ???
+    H_qp_ = Eigen::MatrixXd::Identity(action_dim_, action_dim_);
+    robot_efforts_.setZero();
+  }
+
   sqp_ret_ = sqproblem_->hotstart(
     H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), robot_efforts_.data(),
-    robot_efforts_.data(), max_wsr_, &timestep_);
-  sqp_status_ = qpOASES::getSimpleStatus(sqp_ret_);
+    robot_efforts_.data(), nWSR_qp_, &cputime_qp_);
 
   // impedance_wrench_.noalias() =
   //   (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
@@ -165,6 +188,34 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
 
   compute_hamiltonian();
   return controller_interface::CallbackReturn::SUCCESS;
+}
+
+void MPCIController::assemble_Ln()
+{
+  for (size_t i = 0; i < horizon_; i++)
+  {
+    L_qp_.block(kCartesianDim * i, kStateSpaceDim * i, kCartesianDim, kCartesianDim) =
+      desired_stiffness_;
+    L_qp_.block(
+      kCartesianDim * i, kCartesianDim + kStateSpaceDim * i, kCartesianDim, kCartesianDim) =
+      desired_damping_;
+  }
+}
+
+void MPCIController::update_Ln(Eigen::MatrixXd Cn)
+{
+  for (size_t i = 0; i < horizon_; i++)
+  {
+    L_qp_.block(
+      kCartesianDim * i, kCartesianDim + kStateSpaceDim * i, kCartesianDim, kCartesianDim) -=
+      Cn.block(kCartesianDim * i, kCartesianDim * i, kCartesianDim, kCartesianDim);
+  }
+}
+
+void MPCIController::update_Hqp(Eigen::MatrixXd G, Eigen::MatrixXd J)
+{
+  V_qp_.noalias() = L_qp_ * G + J;
+  H_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * V_qp_;
 }
 
 void MPCIController::publish_status()
@@ -186,6 +237,10 @@ void MPCIController::publish_status()
   status_msg_.data[6] = actual_pose_(0);
   status_msg_.data[7] = actual_pose_(1);
   status_msg_.data[8] = actual_pose_(2);
+
+  status_msg_.data[15] = cputime_qp_;                 // CPU time spent for QP solution
+  status_msg_.data[16] = nWSR_qp_;                    // Number of performed WSR
+  status_msg_.data[17] = static_cast<int>(sqp_ret_);  // check QP status
 
   status_rt_publisher_->try_publish(status_msg_);
 }

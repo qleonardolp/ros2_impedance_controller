@@ -88,8 +88,6 @@ public:
    */
   Eigen::MatrixXd get_G_matrix();
 
-  Eigen::VectorXd get_positions();
-
 private:
   /**
    * @brief update the robot geometric Jacobian: J(q)

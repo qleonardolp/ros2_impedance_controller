@@ -52,7 +52,7 @@ mpcic_controller:
   }
   torque_max: {
     type: double,
-    default_value: 200.0,
+    default_value: 500.0,
     description: "Actuators maximum torque. The MPC use this value as constraint.",
     validation: {
       gt<>: [0.0]

@@ -216,7 +216,5 @@ Eigen::MatrixXd TaskspacePredictor::get_F_matrix() { return F_; }
 
 Eigen::MatrixXd TaskspacePredictor::get_G_matrix() { return G_; }
 
-Eigen::VectorXd TaskspacePredictor::get_positions() { return robot_Q_; }
-
 TaskspacePredictor::~TaskspacePredictor() { data_.reset(); }
 }  // namespace ros2_impedance_controller
