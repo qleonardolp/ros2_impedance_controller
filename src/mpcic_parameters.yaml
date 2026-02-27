@@ -1,0 +1,67 @@
+mpcic_controller:
+  joints: {
+    type: string_array,
+    default_value: [],
+    description: "Name of the joints to control.",
+  }
+  base_link: {
+    type: string,
+    default_value: "",
+    description: "Name of the link used for kinematic reference.",
+  }
+  interaction_link: {
+    type: string,
+    default_value: "",
+    description: "Name of the link used for interaction port, usually is the robot end effector.",
+  }
+  urdf_package: {
+    type: string,
+    default_value: "",
+    description: "Robot description package, used to find the package share directory.",
+  }
+  urdf_relative_path: {
+    type: string,
+    default_value: "",
+    description: "URDF relative path (to 'urdf_package'), with the file name.",
+  }
+  stiffness: {
+    type: double_array,
+    default_value: [],
+    description: "Cartesian stiffness gains [N/m, N/m, N/m, Nm/rad, Nm/rad, Nm/rad]",
+  }
+  damping: {
+    type: double_array,
+    default_value: [],
+    description: "Cartesian damping gains [N.s/m, N.s/m, N.s/m, Nm.s/rad, Nm.s/rad, Nm.s/rad]",
+  }
+  timestep: {
+    type: double,
+    default_value: 0.001,
+    description: "MPC timestep, in seconds. Should match the controller_manager `update_rate`",
+    validation: {
+      gt<>: [0.0]
+    }
+  }
+  horizon: {
+    type: int,
+    default_value: 5,
+    description: "MPC prediction horizon in time steps.",
+    validation: {
+      bounds<>: [1, 50]
+    }
+  }
+  ft_sensor_topic: {
+    type: string,
+    default_value: "",
+    description: "Force-torque sensor topic name",
+  }
+  visualize_reference: {
+    type: bool,
+    default_value: false,
+    read_only: true,
+  }
+  has_effort_states: {
+    type: bool,
+    default_value: true,
+    read_only: true,
+  }

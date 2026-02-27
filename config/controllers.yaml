@@ -38,7 +38,7 @@ spot_leg_controller:
 
 hyl_controller:
   ros__parameters:
-    type: ros2_impedance_controller/BasicCartesianController
+    type: ros2_impedance_controller/MPCIController
     joints:
       - hfe_joint
       - kfe_joint
@@ -49,6 +49,7 @@ hyl_controller:
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
     visualize_reference: true
+    horizon: 5
 
 spot_controller:
   ros__parameters:

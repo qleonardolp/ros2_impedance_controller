@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "ros2_impedance_controller/basic_cartesian_controller.hpp"
+#include "ros2_impedance_controller/mpcic_controller.hpp"
 
 namespace ros2_impedance_controller
 {
-BasicCartesianController::BasicCartesianController() : ImpedanceControllerBase() {}
+MPCIController::MPCIController() : ImpedanceControllerBase() {}
 
-void BasicCartesianController::declare_parameters()
+void MPCIController::declare_parameters()
 {
-  param_listener_ = std::make_shared<::cartesian_controller::ParamListener>(get_node());
+  param_listener_ = std::make_shared<::mpcic_controller::ParamListener>(get_node());
 }
 
-controller_interface::CallbackReturn BasicCartesianController::read_parameters()
+controller_interface::CallbackReturn MPCIController::read_parameters()
 {
   params_ = param_listener_->get_params();
 
@@ -41,6 +41,7 @@ controller_interface::CallbackReturn BasicCartesianController::read_parameters()
     return controller_interface::CallbackReturn::ERROR;
   }
 
+  // Required by the base class:
   joint_names_ = params_.joints;
   base_link_name_ = params_.base_link;
   end_effector_link_name_ = params_.interaction_link;
@@ -48,6 +49,10 @@ controller_interface::CallbackReturn BasicCartesianController::read_parameters()
   urdf_relative_path_ = params_.urdf_relative_path;
   visualize_reference_ = params_.visualize_reference;
   has_effort_states_ = params_.has_effort_states;
+
+  // MPC specific:
+  timestep_ = params_.timestep;
+  horizon_ = static_cast<uint8_t>(params_.horizon);
 
   if (params_.stiffness.empty())
   {
@@ -66,7 +71,7 @@ controller_interface::CallbackReturn BasicCartesianController::read_parameters()
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
-void BasicCartesianController::custom_configuration()
+void MPCIController::custom_configuration()
 {
   status_msg_.data.resize(18, 0.0);
   // Initialize dynamic Eigen members
@@ -75,9 +80,12 @@ void BasicCartesianController::custom_configuration()
   jacobian_pinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
   jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
   jsim_jpinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
+
+  predictor_ = std::make_shared<TaskspacePredictor>(
+    timestep_, horizon_, end_effector_link_name_, robot_model_);
 }
 
-void BasicCartesianController::custom_activation()
+void MPCIController::custom_activation()
 {
   // Dynamic size members (joint space dim)
   accel_feedforward_.setZero();
@@ -87,15 +95,22 @@ void BasicCartesianController::custom_activation()
   estimated_wrench_.setZero();
 
   // PH related
-  impedance_expected_input_.setZero();
   hamiltonian_filtered_ = 0.0;
   hamiltonian_last_ = 0.0;
 }
 
-controller_interface::CallbackReturn BasicCartesianController::update_effort_commands()
+controller_interface::CallbackReturn MPCIController::update_effort_commands()
 {
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
+
+  predictor_->predict(robot_positions_, robot_velocities_, robot_efforts_);
+
+  if (debug_)
+  {
+    RCLCPP_INFO_STREAM(get_node()->get_logger(), "Cn: " << predictor_->get_Cn());
+    debug_ = false;
+  }
 
   if (has_effort_states_)
   {
@@ -123,7 +138,7 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
-void BasicCartesianController::publish_status()
+void MPCIController::publish_status()
 {
   // Robot Hamiltonian - Impedance Hamiltonian
   status_msg_.data[0] = robot_data_->mechanical_energy - hamiltonian_filtered_;
@@ -146,39 +161,7 @@ void BasicCartesianController::publish_status()
   status_rt_publisher_->try_publish(status_msg_);
 }
 
-void BasicCartesianController::zspace_diagnostics()
-{
-  /*
-    if (status_rt_publisher_->trylock())
-    {
-      status_rt_publisher_->msg_.pose.position.x = pose_deviation_(0);
-      status_rt_publisher_->msg_.pose.position.y = pose_deviation_(1);
-      status_rt_publisher_->msg_.pose.position.z = pose_deviation_(2);
-      // Using the quaternion vector as the angles
-      status_rt_publisher_->msg_.pose.orientation.x = pose_deviation_(3);
-      status_rt_publisher_->msg_.pose.orientation.y = pose_deviation_(4);
-      status_rt_publisher_->msg_.pose.orientation.z = pose_deviation_(5);
-
-      status_rt_publisher_->msg_.pose_twist.linear.x = twist_deviation_(0);
-      status_rt_publisher_->msg_.pose_twist.linear.y = twist_deviation_(1);
-      status_rt_publisher_->msg_.pose_twist.linear.z = twist_deviation_(2);
-      status_rt_publisher_->msg_.pose_twist.angular.x = twist_deviation_(3);
-      status_rt_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
-      status_rt_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
-
-      status_rt_publisher_->msg_.pose_accel.linear.x = estimated_wrench_(0);
-      status_rt_publisher_->msg_.pose_accel.linear.y = estimated_wrench_(1);
-      status_rt_publisher_->msg_.pose_accel.linear.z = estimated_wrench_(2);
-      status_rt_publisher_->msg_.pose_accel.angular.x = estimated_wrench_(3);
-      status_rt_publisher_->msg_.pose_accel.angular.y = estimated_wrench_(4);
-      status_rt_publisher_->msg_.pose_accel.angular.z = estimated_wrench_(5);
-
-      status_rt_publisher_->unlockAndPublish();
-    }
-  */
-}
-
-void BasicCartesianController::phase_space_diagnostics()
+void MPCIController::phase_space_diagnostics()
 {
   status_msg_.data[0] = pose_deviation_(0);
   status_msg_.data[1] = pose_deviation_(1);
@@ -210,7 +193,7 @@ void BasicCartesianController::phase_space_diagnostics()
   status_msg_.data[13] = -(desired_damping_ * jacobian_ * robot_data_->Minv).trace();
 }
 
-void BasicCartesianController::compute_hamiltonian()
+void MPCIController::compute_hamiltonian()
 {
   // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_.
   hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
@@ -228,4 +211,4 @@ void BasicCartesianController::compute_hamiltonian()
 #include "pluginlib/class_list_macros.hpp"
 
 PLUGINLIB_EXPORT_CLASS(
-  ros2_impedance_controller::BasicCartesianController, controller_interface::ControllerInterface)
+  ros2_impedance_controller::MPCIController, controller_interface::ControllerInterface)

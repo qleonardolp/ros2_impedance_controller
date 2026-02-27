@@ -31,7 +31,6 @@ set(DEPENDENCIES
 
 find_package(ament_cmake REQUIRED)
 find_package(backward_ros REQUIRED)
-find_package(qpOASES REQUIRED)
 
 foreach(Dependency IN ITEMS ${DEPENDENCIES})
   find_package(${Dependency} REQUIRED)
@@ -43,7 +42,6 @@ generate_parameter_library(
 )
 
 add_library(${PROJECT_NAME} SHARED
-  src/taskspace_predictor.cpp
   src/impedance_controller_base.cpp
   src/basic_cartesian_controller.cpp
   src/cartesian_controller.cpp
@@ -71,25 +69,78 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   ${visualization_msgs_TARGETS}
   ${geometry_msgs_TARGETS}
   ${std_msgs_TARGETS}
-  qpOASES
 )
+
+# MPCIController (qpOASES dependent)
+find_package(qpOASES QUIET)
+if(qpOASES_FOUND)
+  generate_parameter_library(
+    mpcic_parameters
+    src/mpcic_parameters.yaml
+  )
+
+  add_library(mpcic_controller SHARED
+    src/taskspace_predictor.cpp
+    src/mpcic_controller.cpp
+  )
+
+  target_compile_features(mpcic_controller PUBLIC cxx_std_17)
+
+  target_include_directories(mpcic_controller PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+  )
+
+  target_link_libraries(mpcic_controller PUBLIC
+    mpcic_parameters
+    Eigen3::Eigen
+    pinocchio::pinocchio
+    ament_index_cpp::ament_index_cpp
+    controller_interface::controller_interface
+    hardware_interface::hardware_interface
+    realtime_tools::realtime_tools
+    pluginlib::pluginlib
+    rclcpp::rclcpp
+    rclcpp_lifecycle::rclcpp_lifecycle
+    ${kinematic_pose_msgs_TARGETS}
+    ${visualization_msgs_TARGETS}
+    ${geometry_msgs_TARGETS}
+    ${std_msgs_TARGETS}
+    ${PROJECT_NAME}
+    qpOASES
+  )
+
+  install(
+    TARGETS
+      ros2_impedance_controller
+      cartesian_controller_parameters
+      mpcic_controller
+      mpcic_parameters
+    EXPORT export_ros2_impedance_controller
+    RUNTIME DESTINATION bin
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    INCLUDES DESTINATION include
+  )
+else()
+  # Install only the standard controllers
+  install(
+    TARGETS
+      ros2_impedance_controller
+      cartesian_controller_parameters
+    EXPORT export_ros2_impedance_controller
+    RUNTIME DESTINATION bin
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    INCLUDES DESTINATION include
+  )
+endif()
 
 pluginlib_export_plugin_description_file(controller_interface ros2_impedance_controller.xml)
 
 install(
   DIRECTORY config launch worlds
   DESTINATION share/${PROJECT_NAME}
-)
-
-install(
-  TARGETS
-    ros2_impedance_controller
-    cartesian_controller_parameters
-  EXPORT export_ros2_impedance_controller
-  RUNTIME DESTINATION bin
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  INCLUDES DESTINATION include
 )
 
 if(BUILD_TESTING)
