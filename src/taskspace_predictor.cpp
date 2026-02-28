@@ -59,12 +59,9 @@ TaskspacePredictor::TaskspacePredictor(
   robot_ddq_.resize(robot_.nv);
   robot_dq_.resize(robot_.nv);
   robot_q_.resize(robot_.nq);
-  zero_tau_.resize(robot.nq);
-
   robot_ddq_.setZero();
   robot_dq_.setZero();
   robot_q_.setZero();
-  zero_tau_.setZero();
 }
 
 void TaskspacePredictor::predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::VectorXd tau)
@@ -87,9 +84,6 @@ void TaskspacePredictor::predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::Ve
 
   for (size_t k = 1; k < horizon_; ++k)
   {
-    // Next to the 0-th iteration, the prediction is open loop, then the tau vector is zero.
-    // robot_ddq_ = pinocchio::aba(robot_, *data_.get(), robot_q_, robot_dq_, zero_tau_);
-
     // Sample and hold the torque input:
     robot_ddq_ = pinocchio::aba(robot_, *data_.get(), robot_q_, robot_dq_, tau);
     robot_dq_ = robot_dq_ + timestep_ * robot_ddq_;
@@ -110,15 +104,9 @@ void TaskspacePredictor::predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::Ve
 
   // Assemble gravity stack:
   gravityN_ = jacobianN_ * robot_g_;
-
+  // Assemble state space stacks:
   assemble_F();
   assemble_G();
-
-  if (debug_)
-  {
-    std::cout << gravityN_ << std::endl;
-    debug_ = false;
-  }
 }
 
 void TaskspacePredictor::assemble_Jn(std::size_t n)

@@ -52,7 +52,7 @@ controller_interface::CallbackReturn MPCIController::read_parameters()
 
   // MPC specific:
   timestep_ = params_.timestep;
-  cputime_ = 0.001 * 0.5;  // 50% margin
+  cputime_ = timestep_ * 0.5;  // 50% margin
   horizon_ = static_cast<uint8_t>(params_.horizon);
 
   if (params_.stiffness.empty())
@@ -84,8 +84,8 @@ void MPCIController::custom_configuration()
   predictor_ = std::make_shared<TaskspacePredictor>(
     timestep_, horizon_, end_effector_link_name_, robot_model_);
 
-  constraints_dim_ = static_cast<int>(dof_);
-  action_dim_ = constraints_dim_ * horizon_;
+  action_dim_ = static_cast<int>(dof_) * horizon_;
+  constraints_dim_ = action_dim_;
   nWSR_ = 5 * (action_dim_ + constraints_dim_);  // TODO(@qleonardolp): validate s.o.t.a. Ref
 
   // Instantiate and configure SQProblem class ptr:
@@ -99,8 +99,12 @@ void MPCIController::custom_configuration()
   A_qp_ = Eigen::MatrixXd::Zero(constraints_dim_, action_dim_);
   g_qp_ = Eigen::MatrixXd::Zero(1, action_dim_);
   // QP action space bounds:
-  ub_qp_ = Eigen::MatrixXd::Ones(1, action_dim_) * params_.torque_max;
+  du_max_ = Eigen::VectorXd::Ones(dof_) * params_.slew_limit;
+  ubA_qp_ = Eigen::VectorXd::Ones(constraints_dim_) * params_.slew_limit;
+  lbA_qp_ = -ubA_qp_;
+  ub_qp_ = Eigen::VectorXd::Ones(action_dim_) * params_.torque_max;
   lb_qp_ = -ub_qp_;
+
   // Cost function-specific initialization:
   u_qp_ = Eigen::VectorXd::Zero(action_dim_);
   b_qp_ = Eigen::VectorXd::Zero(kCartesianDim * horizon_);
@@ -111,7 +115,6 @@ void MPCIController::custom_configuration()
   task_desired_ = Eigen::VectorXd::Zero(kStateSpaceDim * horizon_);
 
   // Set constant matrices:
-  A_qp_.block(0, 0, dof_, dof_) = Eigen::MatrixXd::Identity(dof_, dof_);
   Q_qp_ = Eigen::MatrixXd::Identity(kCartesianDim * horizon_, kCartesianDim * horizon_);
   R_qp_ = Eigen::MatrixXd::Identity(action_dim_, action_dim_);
 }
@@ -128,12 +131,13 @@ void MPCIController::custom_activation()
   hamiltonian_last_ = 0.0;
 
   assemble_Ln();  // initially depends on Kd an Dd only
+  assemble_Aqp();
 
   // QP initialization
   int init_nWSR = 10;
   sqp_ret_ = sqproblem_->init(
-    H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), effort_commands_.data(),
-    effort_commands_.data(), init_nWSR);
+    H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), lbA_qp_.data(),
+    ubA_qp_.data(), init_nWSR);
 
   RCLCPP_INFO(
     get_node()->get_logger(), "QP init status: %i, with nWSR=%i, cputime=%.4f",
@@ -147,9 +151,12 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
   // Then we must reset those values at every loop iteration
   cputime_qp_ = cputime_;
   nWSR_qp_ = nWSR_;
+  // update inequality constraints
+  lbA_qp_.head(dof_) = robot_efforts_ - du_max_;
+  ubA_qp_.head(dof_) = robot_efforts_ + du_max_;
 
   // run taskspace predictor
-  predictor_->predict(robot_positions_, robot_velocities_, effort_commands_);
+  predictor_->predict(robot_positions_, robot_velocities_, robot_efforts_);
 
   // update Cost function and QP matrices
   update_references();
@@ -158,26 +165,28 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
 
   // Solve SQProblem
   if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED)
-  {  // Previous iteration failed. maybe H_qp_ is not positive (semi-)definite ???
-    H_qp_ = 2 * R_qp_;
+  {  // Previous iteration failed. Reset tau_0 guess
+    effort_commands_ = jacobian_.transpose() * impedance_wrench_;
+    lbA_qp_.head(dof_) = effort_commands_ - du_max_;
+    ubA_qp_.head(dof_) = effort_commands_ + du_max_;
   }
 
   sqp_ret_ = sqproblem_->hotstart(
-    H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), effort_commands_.data(),
-    effort_commands_.data(), nWSR_qp_, &cputime_qp_);
+    H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), lbA_qp_.data(),
+    ubA_qp_.data(), nWSR_qp_, &cputime_qp_);
   sqproblem_->getPrimalSolution(u_qp_.data());
 
-  // use the first action (tau_0)
-  // from inspection it looks to be at the end of u_qp_
-  tau_desired_ = u_qp_.tail(dof_);
+  tau_desired_ = u_qp_.head(dof_);  // use the first action (tau_0)
   effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
 
+  /*
   if (debug_)
   {
     RCLCPP_INFO_STREAM(
-      get_node()->get_logger(), "u_qp: " << std::fixed << std::setprecision(3) << u_qp_);
+      get_node()->get_logger(), "u_qp_: " << std::fixed << std::setprecision(2) << u_qp_);
     debug_ = false;
   }
+  */
 
   compute_hamiltonian();
   return controller_interface::CallbackReturn::SUCCESS;
@@ -194,6 +203,15 @@ void MPCIController::assemble_Ln()
       desired_damping_;
   }
   Z_qp_ = L_qp_;
+}
+
+void MPCIController::assemble_Aqp()
+{
+  A_qp_ = Eigen::MatrixXd::Identity(constraints_dim_, action_dim_);
+  for (size_t i = dof_; i < constraints_dim_; i++)
+  {
+    A_qp_(i, i - dof_) = -1;
+  }
 }
 
 void MPCIController::update_Ln(Eigen::MatrixXd Cn)
@@ -274,9 +292,7 @@ void MPCIController::publish_status()
   status_msg_.data[12] = tau_desired_(0);
   status_msg_.data[13] = tau_desired_(1);
 
-  status_msg_.data[15] = cputime_qp_;              // CPU time spent for QP solution
-  status_msg_.data[16] = sqproblem_->getObjVal();  // Objective function value
-  // status_msg_.data[16] = nWSR_qp_;                    // Number of performed WSR
+  status_msg_.data[16] = cputime_qp_;                 // CPU time spent to solve
   status_msg_.data[17] = static_cast<int>(sqp_ret_);  // check QP status
 
   status_rt_publisher_->try_publish(status_msg_);
@@ -333,7 +349,7 @@ void MPCIController::compute_hamiltonian()
   hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / delta_t_;
   hamiltonian_last_ = hamiltonian_filtered_;
 
-  // to status:
+  // for status:
   impedance_wrench_.noalias() =
     (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
 

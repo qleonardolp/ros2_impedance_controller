@@ -187,10 +187,8 @@ private:
   Eigen::VectorXd robot_q_;    // joint configuration
   Eigen::VectorXd robot_dq_;   // joint velocities
   Eigen::VectorXd robot_ddq_;  // joint acceleration
-  Eigen::VectorXd zero_tau_;   // zero torque vector
 
   size_t dof_;
-  bool debug_{false};
 };
 
 }  // namespace ros2_impedance_controller

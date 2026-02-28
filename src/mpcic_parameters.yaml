@@ -47,13 +47,21 @@ mpcic_controller:
     default_value: 5,
     description: "MPC prediction horizon in time steps.",
     validation: {
-      bounds<>: [1, 200]
+      bounds<>: [1, 150]
     }
   }
   torque_max: {
     type: double,
-    default_value: 250.0,
+    default_value: 500.0,
     description: "Actuators maximum torque. The MPC use this value as constraint.",
+    validation: {
+      gt<>: [0.0]
+    }
+  }
+  slew_limit: {
+    type: double,
+    default_value: 1.0,
+    description: "Maximum torque delta between timesteps.",
     validation: {
       gt<>: [0.0]
     }

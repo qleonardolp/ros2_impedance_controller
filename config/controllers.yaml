@@ -63,9 +63,33 @@ mpc_controller:
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
     visualize_reference: true
-    torque_max: 150.0
+    torque_max: 140.0  # from HyL URDF
+    slew_limit: 0.9
     timestep: 0.001
-    horizon: 35  # working up-to 60
+    horizon: 30
+
+ur5_mpc:
+  ros__parameters:
+    type: ros2_impedance_controller/MPCIController
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_joint
+      - wrist_1_joint
+      - wrist_2_joint
+      - wrist_3_joint
+    base_link: base_link
+    interaction_link: ee_link
+    ft_sensor_topic: end_effector_ft_sensor
+    stiffness: [400.0, 400.0, 400.0, 70.0, 70.0, 40.0]  # TODO: tuning
+    damping: [134.16, 134.16, 134.16, 15.086, 15.086, 15.086]
+    urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
+    urdf_package: ros2_descriptions
+    visualize_reference: true
+    torque_max: 150.0  # this one has different limits for half of the joints
+    slew_limit: 0.9
+    timestep: 0.001
+    horizon: 10  # test it!
 
 spot_controller:
   ros__parameters:

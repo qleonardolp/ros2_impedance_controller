@@ -77,6 +77,8 @@ protected:
    */
   void assemble_Ln();
 
+  void assemble_Aqp();
+
   void update_taskstates();
 
   void update_references();
@@ -93,25 +95,26 @@ protected:
 
   double timestep_;
   uint8_t horizon_;
-  // Online active-set strategy for QPs with varying matrices
+  // Online Active-Set strategy for QPs with varying matrices
   std::shared_ptr<qpOASES::SQProblem> sqproblem_;
   qpOASES::Options sqp_options_;  // QP Options
   qpOASES::returnValue sqp_ret_;  // QP return value
   int sqp_status_;                // QP simple status (see docs)
-  int constraints_dim_;           // constraints space dimension (nC): DoF
-  int action_dim_;                // action space dimension (nV): DoF*N
+  uint constraints_dim_;          // constraints space dimension (nC): DoF
+  uint action_dim_;               // action space dimension (nV): DoF*N
 
-  MatrixXr H_qp_;      // QP Hessian matrix
-  MatrixXr g_qp_;      // QP gradient vector
-  MatrixXr A_qp_;      // QP constraint matrix
-  MatrixXr lb_qp_;     // QP lower bound vector
-  MatrixXr ub_qp_;     // QP upper bound vector
-  MatrixXr lbA_qp_;    // QP lower constraints' bound vector
-  MatrixXr ubA_qp_;    // QP upper constraints' bound vector
-  int nWSR_;           // QP max number of working set recalculations (nWSR)
-  int nWSR_qp_;        // QP WSR for in place output in `hotstart` method
-  double cputime_;     // QP maximum allowed CPU time in seconds
-  double cputime_qp_;  // CPU time spent for QP solution (or to perform nWSR iterations)
+  MatrixXr H_qp_;           // QP Hessian matrix
+  MatrixXr g_qp_;           // QP gradient vector
+  MatrixXr A_qp_;           // QP constraint matrix
+  Eigen::VectorXd lb_qp_;   // QP lower bound vector
+  Eigen::VectorXd ub_qp_;   // QP upper bound vector
+  Eigen::VectorXd lbA_qp_;  // QP lower constraints' bound vector
+  Eigen::VectorXd ubA_qp_;  // QP upper constraints' bound vector
+  Eigen::VectorXd du_max_;  // QP maximum action delta (u_{k+1} - u_{k})
+  int nWSR_;                // QP max number of working set recalculations (nWSR)
+  int nWSR_qp_;             // QP WSR for in place output in `hotstart` method
+  double cputime_;          // QP maximum allowed CPU time in seconds
+  double cputime_qp_;       // CPU time spent for QP solution (or to perform nWSR iterations)
 
   /**
    * @note Cost function is: min_{u} (V*u + b)^T*Q*(V*u + b) + u^T*R*u,
