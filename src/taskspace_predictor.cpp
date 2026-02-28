@@ -39,6 +39,9 @@ TaskspacePredictor::TaskspacePredictor(
   coriolisN_ = Eigen::MatrixXd::Zero(kCartesianDim * horizon, kCartesianDim * horizon);
   task_coriolis_.setIdentity();
 
+  gravityN_ = Eigen::VectorXd::Zero(dof_ * horizon);
+  robot_g_ = Eigen::VectorXd::Zero(dof_ * horizon);
+
   Ak_ = Eigen::MatrixXd::Identity(kStateSpaceDim, kStateSpaceDim);
   Bk_ = Eigen::MatrixXd::Zero(kStateSpaceDim, dof_);
 
@@ -58,8 +61,6 @@ TaskspacePredictor::TaskspacePredictor(
   robot_q_.resize(robot_.nq);
   zero_tau_.resize(robot.nq);
 
-  robot_Q_.resize(dof_ * horizon);
-
   robot_ddq_.setZero();
   robot_dq_.setZero();
   robot_q_.setZero();
@@ -72,6 +73,7 @@ void TaskspacePredictor::predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::Ve
   robot_ddq_ = pinocchio::aba(robot_, *data_.get(), q, v, tau);
   robot_dq_ = v + timestep_ * robot_ddq_;
   robot_q_ = pinocchio::integrate(robot_, q, timestep_ * robot_dq_);
+  robot_g_.segment(0, dof_) = pinocchio::computeGeneralizedGravity(robot_, *data_.get(), robot_q_);
   update_inertia();
 
   update_jacobian();
@@ -83,17 +85,17 @@ void TaskspacePredictor::predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::Ve
   update_coriolis();
   assemble_Cn(0);
 
-  robot_Q_.segment(0, dof_) = robot_q_;
-
   for (size_t k = 1; k < horizon_; ++k)
   {
     // Next to the 0-th iteration, the prediction is open loop, then the tau vector is zero.
-    robot_ddq_ = pinocchio::aba(robot_, *data_.get(), robot_q_, robot_dq_, zero_tau_);
+    // robot_ddq_ = pinocchio::aba(robot_, *data_.get(), robot_q_, robot_dq_, zero_tau_);
 
     // Sample and hold the torque input:
-    // robot_ddq_ = pinocchio::aba(robot_, *data_.get(), robot_q_, robot_dq_, tau);
+    robot_ddq_ = pinocchio::aba(robot_, *data_.get(), robot_q_, robot_dq_, tau);
     robot_dq_ = robot_dq_ + timestep_ * robot_ddq_;
     robot_q_ = pinocchio::integrate(robot_, robot_q_, timestep_ * robot_dq_);
+    robot_g_.segment(k * dof_, dof_) =
+      pinocchio::computeGeneralizedGravity(robot_, *data_.get(), robot_q_);
     update_inertia();
 
     update_jacobian();
@@ -104,16 +106,17 @@ void TaskspacePredictor::predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::Ve
 
     update_coriolis();
     assemble_Cn(k);
-
-    robot_Q_.segment(k * dof_, dof_) = robot_q_;
   }
+
+  // Assemble gravity stack:
+  gravityN_ = jacobianN_ * robot_g_;
 
   assemble_F();
   assemble_G();
 
   if (debug_)
   {
-    std::cout << G_ << std::endl;
+    std::cout << gravityN_ << std::endl;
     debug_ = false;
   }
 }
@@ -211,6 +214,8 @@ void TaskspacePredictor::update_Bk(std::size_t n)
 Eigen::MatrixXd TaskspacePredictor::get_Jn() { return jacobianN_; }
 
 Eigen::MatrixXd TaskspacePredictor::get_Cn() { return coriolisN_; }
+
+Eigen::MatrixXd TaskspacePredictor::get_gn() { return gravityN_; }
 
 Eigen::MatrixXd TaskspacePredictor::get_F_matrix() { return F_; }
 

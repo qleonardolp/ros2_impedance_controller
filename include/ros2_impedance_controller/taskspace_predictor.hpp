@@ -77,6 +77,11 @@ public:
   Eigen::MatrixXd get_Cn();
 
   /**
+   * @brief Get (task) gravity vector `stack` over the horizon
+   */
+  Eigen::MatrixXd get_gn();
+
+  /**
    * @brief Get state transition matrix over the horizon.
    * F dimensions: 12*`N` x 12
    */
@@ -167,6 +172,8 @@ private:
 
   Eigen::MatrixXd jacobianN_;  // Jacobian `stack` over the horizon
   Eigen::MatrixXd coriolisN_;  // Task Coriolis `stack` over the horizon
+  Eigen::VectorXd gravityN_;   // Task gravity vector `stack` over the horizon
+  Eigen::VectorXd robot_g_;    // Joint gravity over the horizon
 
   Eigen::MatrixXd Ak_;  // State space transition matrix
   Eigen::MatrixXd Bk_;  // State space input matrix
@@ -182,10 +189,7 @@ private:
   Eigen::VectorXd robot_ddq_;  // joint acceleration
   Eigen::VectorXd zero_tau_;   // zero torque vector
 
-  Eigen::VectorXd robot_Q_;  // joint configuration over the horizon
-
   size_t dof_;
-
   bool debug_{false};
 };
 

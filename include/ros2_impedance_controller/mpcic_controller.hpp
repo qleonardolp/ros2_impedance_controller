@@ -77,9 +77,13 @@ protected:
    */
   void assemble_Ln();
 
+  void update_taskstates();
+
+  void update_references();
+
   void update_Ln(Eigen::MatrixXd Cn);
 
-  void update_Hqp(Eigen::MatrixXd G, Eigen::MatrixXd J);
+  void update_QP();
 
   std::shared_ptr<::mpcic_controller::ParamListener> param_listener_;
   ::mpcic_controller::Params params_;
@@ -110,15 +114,22 @@ protected:
   double cputime_qp_;  // CPU time spent for QP solution (or to perform nWSR iterations)
 
   /**
-   * @note Cost function is: min_{u} (V*u + b)^T * Q * (V*u + b),
+   * @note Cost function is: min_{u} (V*u + b)^T*Q*(V*u + b) + u^T*R*u,
    * where:
    * b := L*F*x_0 - Z*x_{d} - J*g(q)
    * V := L*G + J
    */
 
-  Eigen::MatrixXd V_qp_;  // V multiplies `u` in the cost function
+  Eigen::MatrixXd V_qp_;  // `V` multiplies `u` in the cost function
+  Eigen::VectorXd b_qp_;  // bias vector `b` in the cost function
   Eigen::MatrixXd L_qp_;  // action space projection along the horizon
-  Eigen::MatrixXd Q_qp_;  // cost function norm weight matrix
+  Eigen::MatrixXd Z_qp_;  // impedance gains along the horizon
+  Eigen::MatrixXd Q_qp_;  // task space dynamics error norm weight
+  Eigen::MatrixXd R_qp_;  // joint space torque `stack` norm weight
+  Eigen::VectorXd u_qp_;  // QP solution as Eigen::Vector
+
+  Eigen::Matrix<double, kStateSpaceDim, 1> task_states_;  // task space state vector
+  Eigen::VectorXd task_desired_;  // impedance setpoint state (x_{d}) along the horizon
 
   /* Port-Hamiltonian variables */
   // Impedance Hamiltonian function value
@@ -133,10 +144,12 @@ protected:
   Vector6d estimated_wrench_;
 
   // Command terms
-  VectorXd tau_desired_;
+  Eigen::VectorXd tau_desired_;
 
   Eigen::MatrixXd jacobian_pinv_;
   Eigen::MatrixXd jacobianT_pinv_;
+
+  size_t dof_;
 };
 
 }  // namespace ros2_impedance_controller

@@ -63,7 +63,9 @@ mpc_controller:
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
     visualize_reference: true
-    horizon: 3
+    torque_max: 150.0
+    timestep: 0.001
+    horizon: 35  # working up-to 60
 
 spot_controller:
   ros__parameters:
