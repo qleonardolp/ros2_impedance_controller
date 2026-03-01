@@ -72,16 +72,14 @@ controller_interface::CallbackReturn CartesianController::read_parameters()
   }
   else
   {
-    Vector6d inertia_diagonal;
     const double mass = params_.taskspace_mass;
     const double I = 0.4 * mass * (0.425 * 0.425);  // sphere moment of inertia
-    inertia_diagonal << mass, mass, mass, I, I, I;
-    desired_inertia_.diagonal() = inertia_diagonal;
-    desired_inertia_inv_ = inertia_diagonal.cwiseInverse().asDiagonal();
+    desired_inertia_.diagonal() << mass, mass, mass, I, I, I;
+    desired_inertia_inv_ = desired_inertia_.diagonal().cwiseInverse().asDiagonal();
     // Damping: D = 2 * ζ * sqrt(K * M)
     desired_damping_.diagonal() =
       2 * kDampingRatio *
-      (inertia_diagonal.array() * desired_stiffness_.diagonal().array()).abs().sqrt();
+      (desired_inertia_.diagonal().array() * desired_stiffness_.diagonal().array()).abs().sqrt();
     inertia_shaping_ = true;
   }
 
