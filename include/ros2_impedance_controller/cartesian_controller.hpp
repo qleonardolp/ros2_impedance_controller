@@ -54,12 +54,6 @@ protected:
   void publish_status() override;
 
   /**
-   * @brief Impedance space diagnostics with pose_deviation_, twist_deviation_,
-   * and interaction wrench estimation.
-   */
-  void zspace_diagnostics();
-
-  /**
    * @brief Phase space diagnostics.
    */
   void phase_space_diagnostics();
@@ -94,6 +88,8 @@ protected:
   Vector6d sensor_wrench_;
   // Interaction wrench estimation
   Vector6d estimated_wrench_;
+  // End effector task space twist derivative
+  Vector6d accel_deviation_;
 
   // Command terms
   VectorXd twist_compensation_;
@@ -101,7 +97,7 @@ protected:
   VectorXd impedance_torques_;
   VectorXd tau_desired_;
 
-  Matrix6Xd jacobian_derivative_;
+  Eigen::MatrixXd jacobian_dt_;
   Eigen::MatrixXd jacobian_pinv_;
   Eigen::MatrixXd jacobianT_pinv_;
   Eigen::MatrixXd jsim_jpinv_dj_;

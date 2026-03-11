@@ -298,6 +298,7 @@ bool ImpedanceControllerBase::update_robot()
     }
 
     // Finite difference
+    // TODO(@qleonardolp): LPF ddq
     robot_accelerations_(k) = (robot_velocities_(k) - robot_velocities_last_(k)) / delta_t_;
     robot_velocities_last_(k) = robot_velocities_(k);
   }
