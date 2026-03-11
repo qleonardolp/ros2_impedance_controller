@@ -128,7 +128,7 @@ void BasicCartesianController::publish_status()
   // Robot Hamiltonian - Impedance Hamiltonian
   status_msg_.data[0] = robot_data_->mechanical_energy - hamiltonian_filtered_;
   // Commands input power
-  status_msg_.data[1] = robot_velocities_.transpose() * effort_commands_;
+  status_msg_.data[1] = robot_dq_.transpose() * effort_commands_;
   // Interaction power using estimated interaction wrench
   status_msg_.data[2] = actual_twist_.transpose() * estimated_wrench_;
   // Impedance Hamiltonian

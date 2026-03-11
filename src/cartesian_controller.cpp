@@ -157,7 +157,7 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
     jacobian_dt_);
 
   // Compute `interaction_link` task space acceleration
-  actual_accel_.noalias() = jacobian_ * robot_accelerations_ + jacobian_dt_ * robot_velocities_;
+  actual_accel_.noalias() = jacobian_ * robot_ddq_ + jacobian_dt_ * robot_dq_;
   accel_deviation_.noalias() = actual_accel_ - desired_pose_accel_;
 
   robot_data_->M.triangularView<Eigen::StrictlyLower>() =
@@ -183,7 +183,7 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
   }
 
   accel_feedforward_ = jsim_jpinv_ * desired_pose_accel_;
-  twist_compensation_.noalias() = (robot_data_->C - jsim_jpinv_dj_) * robot_velocities_;
+  twist_compensation_.noalias() = (robot_data_->C - jsim_jpinv_dj_) * robot_dq_;
   tau_desired_ = accel_feedforward_ + impedance_torques_ + twist_compensation_ + robot_data_->g;
 
   effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
@@ -197,7 +197,7 @@ void CartesianController::publish_status()
   // Robot Hamiltonian - Impedance Hamiltonian
   status_msg_.data[0] = robot_data_->mechanical_energy - hamiltonian_filtered_;
   // Commands input power
-  status_msg_.data[1] = robot_velocities_.transpose() * effort_commands_;
+  status_msg_.data[1] = robot_dq_.transpose() * effort_commands_;
   // Interaction power using F/T Sensor (ground truth)
   status_msg_.data[2] = actual_twist_.transpose() * sensor_wrench_;
   // Impedance Hamiltonian

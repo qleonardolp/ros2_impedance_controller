@@ -156,7 +156,7 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
   ubA_qp_.head(dof_) = robot_efforts_ + du_max_;
 
   // run taskspace predictor
-  predictor_->predict(robot_positions_, robot_velocities_, robot_efforts_);
+  predictor_->predict(robot_q_, robot_dq_, robot_efforts_);
 
   // update Cost function and QP matrices
   update_references();
@@ -272,7 +272,7 @@ void MPCIController::publish_status()
   // Robot Hamiltonian - Impedance Hamiltonian
   status_msg_.data[0] = robot_data_->mechanical_energy - hamiltonian_filtered_;
   // Commands input power
-  status_msg_.data[1] = robot_velocities_.transpose() * effort_commands_;
+  status_msg_.data[1] = robot_dq_.transpose() * effort_commands_;
   // Interaction power using estimated interaction wrench
   status_msg_.data[2] = actual_twist_.transpose() * estimated_wrench_;
   // Impedance Hamiltonian

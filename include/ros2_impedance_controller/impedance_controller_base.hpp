@@ -112,8 +112,8 @@ protected:
   /**
    * @brief Compute and update effort commands (control action).
    *
-   * Before call this method, base class update robot states: `robot_positions_`,
-   * `robot_velocities_`, `robot_accelerations_`, and `robot_efforts_` (if available).
+   * Before call this method, base class update robot states: `robot_q_`,
+   * `robot_dq_`, `robot_ddq_`, and `robot_efforts_` (if available).
    * Robot geometric Jacobian, kinematic deviations, and `reference_` are also updated.
    *
    * In the end, this method must write on `effort_commands_`.
@@ -186,6 +186,8 @@ protected:
   // Torque low-pass filter alpha for Nyquist frequency.
   double cmd_lpf_alpha_{0.7585469929947761};
 
+  double acc_lpf_alpha_{0.6110154703516573};
+
   rclcpp::Time clock_time_last_;
   double delta_t_{0};
 
@@ -238,11 +240,12 @@ protected:
   Vector6d twist_deviation_;  // End effector twist deviation
 
   // Joint space state vectors
-  VectorXd robot_positions_;
-  VectorXd robot_velocities_;
-  VectorXd robot_velocities_last_;
-  VectorXd robot_accelerations_;
-  VectorXd robot_efforts_;
+  VectorXd robot_q_;         // robot joint positions
+  VectorXd robot_dq_;        // robot joint velocities
+  VectorXd robot_dq_last_;   // previous robot joint velocities
+  VectorXd robot_ddq_;       // robot joint accelerations
+  VectorXd robot_ddq_filt_;  // robot joint accelerations filtered
+  VectorXd robot_efforts_;   // robot joint efforts (torque or force)
 
   // Controller command vector (joint space)
   VectorXd effort_commands_;

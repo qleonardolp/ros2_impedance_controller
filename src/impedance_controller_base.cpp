@@ -98,10 +98,11 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_configure(
     });
 
   // Initialize dynamic Eigen members
-  robot_positions_.resize(degrees_of_freedom_);
-  robot_velocities_.resize(degrees_of_freedom_);
-  robot_velocities_last_.resize(degrees_of_freedom_);
-  robot_accelerations_.resize(degrees_of_freedom_);
+  robot_q_.resize(degrees_of_freedom_);
+  robot_dq_.resize(degrees_of_freedom_);
+  robot_dq_last_.resize(degrees_of_freedom_);
+  robot_ddq_.resize(degrees_of_freedom_);
+  robot_ddq_filt_.resize(degrees_of_freedom_);
   robot_efforts_.resize(degrees_of_freedom_);
   effort_commands_.resize(degrees_of_freedom_);
   jacobian_ = Matrix6Xd::Zero(kCartesianDim, degrees_of_freedom_);
@@ -148,7 +149,8 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   // Dynamic size members (joint space dim)
   jacobian_.setZero();
   effort_commands_.setZero();
-  robot_velocities_last_.setZero();
+  robot_ddq_filt_.setZero();
+  robot_dq_last_.setZero();
 
   // ros2_control interfaces
   effort_command_interfaces_.resize(degrees_of_freedom_, nullptr);
@@ -290,30 +292,32 @@ bool ImpedanceControllerBase::update_robot()
 
     if (has_effort_states_ && !effort.has_value()) return false;
 
-    robot_positions_(k) = position.value();
-    robot_velocities_(k) = velocity.value();
+    robot_q_(k) = position.value();
+    robot_dq_(k) = velocity.value();
     if (has_effort_states_)
     {
       robot_efforts_(k) = effort.value();
     }
 
     // Finite difference
-    // TODO(@qleonardolp): LPF ddq
-    robot_accelerations_(k) = (robot_velocities_(k) - robot_velocities_last_(k)) / delta_t_;
-    robot_velocities_last_(k) = robot_velocities_(k);
+    robot_ddq_(k) = (robot_dq_(k) - robot_dq_last_(k)) / delta_t_;
+    robot_dq_last_(k) = robot_dq_(k);
   }
-  pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_positions_, robot_velocities_);
-  pinocchio::computeMinverse(robot_model_, *robot_data_.get(), robot_positions_);
+
+  robot_ddq_filt_ = acc_lpf_alpha_ * robot_ddq_ + (1.0 - acc_lpf_alpha_) * robot_ddq_filt_;
+
+  pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_q_, robot_dq_);
+  pinocchio::computeMinverse(robot_model_, *robot_data_.get(), robot_q_);
   return true;
 }
 
 void ImpedanceControllerBase::update_deviation_and_reference()
 {
   pinocchio::computeFrameJacobian(
-    robot_model_, *robot_data_.get(), robot_positions_, end_effector_frame_,
-    pinocchio::LOCAL_WORLD_ALIGNED, jacobian_);
+    robot_model_, *robot_data_.get(), robot_q_, end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
+    jacobian_);
 
-  actual_twist_.noalias() = jacobian_ * robot_velocities_;
+  actual_twist_.noalias() = jacobian_ * robot_dq_;
 
   double position_norm1_ = 0;
   auto ref_optional = rt_reference_.try_get();
