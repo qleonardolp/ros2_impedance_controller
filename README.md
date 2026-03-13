@@ -1,11 +1,12 @@
 # ros2_impedance_controller
-[![IEEE Xplore](https://img.shields.io/badge/ICAR%202025-11338640-blue?logo=IEEE)](https://ieeexplore.ieee.org/document/11338640)
+[![IEEE Xplore](https://img.shields.io/badge/ICAR%202025-11338640-blue?logo=IEEE)](https://ieeexplore.ieee.org/document/11338640) [![Static Badge](https://img.shields.io/badge/v1.2.0-%20?style=flat&logo=github&labelColor=gray&color=blue)](https://github.com/qleonardolp/ros2_impedance_controller/tree/v1.2.0)
+
 
 Robot impedance controller designed with the `ros2_control` framework and Pinocchio. Default branch ROS2 distro: Jazzy
 
 - Custom build dependency: [kinematic_pose_msgs](https://github.com/qleonardolp/kinematic_pose_msgs)
-- Simulation dependency: [ros2_descriptions](https://github.com/qleonardolp/ros2_descriptions)
-- Handy reference generator: [impedance_reference_generator](https://github.com/qleonardolp/impedance_reference_generator)
+- Tailored robot descriptions: [ros2_descriptions](https://github.com/qleonardolp/ros2_descriptions)
+- Handy reference generator: [robot_impedance_analyzer](https://github.com/qleonardolp/robot_impedance_analyzer/tree/v1.2.0)
 
 ## Instructions
 
