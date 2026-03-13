@@ -1,5 +1,6 @@
 # ros2_impedance_controller
-[![IEEE Xplore](https://img.shields.io/badge/ICAR%202025-11338640-blue?logo=IEEE)](https://ieeexplore.ieee.org/document/11338640) ![Static Badge](https://img.shields.io/badge/v1.2.0-%20?style=flat&logo=github&labelColor=gray&color=blue&link=https%3A%2F%2Fgithub.com%2Fqleonardolp%2Fros2_impedance_controller%2Ftree%2Fv1.2.0)
+[![IEEE Xplore](https://img.shields.io/badge/ICAR%202025-11338640-blue?logo=IEEE)](https://ieeexplore.ieee.org/document/11338640) [![Static Badge](https://img.shields.io/badge/v1.2.0-%20?style=flat&logo=github&labelColor=gray&color=blue)](https://github.com/qleonardolp/ros2_impedance_controller/tree/v1.2.0)
+
 
 Robot impedance controller designed with the `ros2_control` framework and Pinocchio. Default branch ROS2 distro: Jazzy
 
