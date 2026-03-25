@@ -239,8 +239,7 @@ void MPCIController::update_QP()
 void MPCIController::update_taskstates()
 {
   actual_pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
-  actual_pose_.tail<3>() = robot_data_.get()->oMf[end_effector_frame_].rotation().eulerAngles(
-    2, 0, 2);  // TODO(@me): validate Euler convention
+  actual_pose_.tail<3>() = pinocchio::log3(robot_data_.get()->oMf[end_effector_frame_].rotation());
   task_states_.head<kCartesianDim>() = actual_pose_;
   task_states_.tail<kCartesianDim>() = actual_twist_;  // updated from the base class
 }
@@ -254,10 +253,17 @@ void MPCIController::update_references()
       task_desired_.segment((k - 1) * kStateSpaceDim, kStateSpaceDim);
   }
 
+  quat_desired_.x() = reference_.pose.orientation.x;
+  quat_desired_.y() = reference_.pose.orientation.y;
+  quat_desired_.z() = reference_.pose.orientation.z;
+  quat_desired_.w() = reference_.pose.orientation.w;
+
   task_desired_(0) = reference_.pose.position.x;
   task_desired_(1) = reference_.pose.position.y;
   task_desired_(2) = reference_.pose.position.z;
-  // TODO(@me): resolve x_d Euler angles
+
+  log3_desired_ = pinocchio::log3(quat_desired_.toRotationMatrix());
+  task_desired_.segment(3, 3) = log3_desired_;
 
   task_desired_(6) = reference_.pose_twist.linear.x;
   task_desired_(7) = reference_.pose_twist.linear.y;

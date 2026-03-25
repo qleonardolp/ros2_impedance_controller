@@ -140,6 +140,10 @@ void CartesianController::custom_activation()
   impedance_expected_input_.setZero();
   hamiltonian_filtered_ = 0.0;
   hamiltonian_last_ = 0.0;
+
+  // Sys ID
+  ls_input_.setOnes();
+  ls_out_.setZero();
 }
 
 controller_interface::CallbackReturn CartesianController::update_effort_commands()
@@ -189,6 +193,7 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
   effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
 
   compute_hamiltonian();
+  zspace_regression();
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -283,6 +288,27 @@ void CartesianController::compute_hamiltonian()
     cmd_lpf_alpha_ * hamiltonian_ + (1.0 - cmd_lpf_alpha_) * hamiltonian_filtered_;
   hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / delta_t_;
   hamiltonian_last_ = hamiltonian_filtered_;
+}
+
+void CartesianController::zspace_regression()
+{
+  // Roll u and y
+  for (size_t k = 3 - 1; k > 0; --k)
+  {
+    ls_input_.col(k) = ls_input_.col(k - 1);
+    ls_out_.col(k) = ls_out_.col(k - 1);
+  }
+  // Update
+  ls_input_.col(0).head<kCartesianDim>().noalias() =
+    desired_pose_accel_ + desired_inertia_inv_ * (impedance_wrench_ + sensor_wrench_);
+  // ls_input_.col(0) last element is 1
+  ls_out_.col(0).noalias() = actual_accel_;
+
+  // Compute S_{\Lambda}
+  ls_S_lambda_.noalias() =
+    ls_out_ * ls_input_.transpose() * (ls_input_ * ls_input_.transpose()).inverse();
+
+  ls_b_.noalias() = ls_S_lambda_.rightCols<1>();  // S_lambda_ last column
 }
 
 }  // namespace ros2_impedance_controller

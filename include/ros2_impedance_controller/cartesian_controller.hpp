@@ -63,6 +63,11 @@ protected:
    */
   void compute_hamiltonian();
 
+  /**
+   * @brief Impedance Space linear regression
+   */
+  void zspace_regression();
+
   std::shared_ptr<::cartesian_controller::ParamListener> param_listener_;
   ::cartesian_controller::Params params_;
 
@@ -102,6 +107,16 @@ protected:
   Eigen::MatrixXd jacobianT_pinv_;
   Eigen::MatrixXd jsim_jpinv_dj_;
   Eigen::MatrixXd jsim_jpinv_;
+
+  /* Impedance Model-plant mismatch identification */
+  // Least squares regression inputs (u), in linear form
+  Eigen::Matrix<double, kCartesianDim + 1, 3> ls_input_;
+  // Least squares outputs (y), in linear form
+  Eigen::Matrix<double, kCartesianDim, 3> ls_out_;
+  // Least squares unknown matrix, in linear form
+  Eigen::Matrix<double, kCartesianDim, kCartesianDim + 1> ls_S_lambda_;
+  // Closed-loop push-pull wrench from poorly compensated inverse dynamics
+  Vector6d ls_b_;
 };
 
 }  // namespace ros2_impedance_controller

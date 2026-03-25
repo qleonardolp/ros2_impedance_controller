@@ -152,6 +152,8 @@ void TaskspacePredictor::assemble_G()
 
 void TaskspacePredictor::update_jacobian()
 {
+  // TODO(@qleonardolp): refact the Jacobian computation to use
+  // Lie Algebra with pinocchio::Jlog3(phi)
   pinocchio::computeFrameJacobian(
     robot_, *data_.get(), robot_q_, ee_frame_, pinocchio::LOCAL_WORLD_ALIGNED, jacobian_);
 

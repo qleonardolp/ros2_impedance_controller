@@ -132,7 +132,9 @@ protected:
   Eigen::VectorXd u_qp_;  // QP solution as Eigen::Vector
 
   Eigen::Matrix<double, kStateSpaceDim, 1> task_states_;  // task space state vector
-  Eigen::VectorXd task_desired_;  // impedance setpoint state (x_{d}) along the horizon
+  Eigen::VectorXd task_desired_;     // impedance setpoint state (x_{d}) along the horizon
+  Eigen::Quaterniond quat_desired_;  // x_{d} pose quaternion
+  Eigen::Vector3d log3_desired_;     // x_{d} pose quaternion log3 map
 
   /* Port-Hamiltonian variables */
   // Impedance Hamiltonian function value
