@@ -91,19 +91,78 @@ ur5_mpc:
     timestep: 0.001
     horizon: 10  # test it!
 
-spot_controller:
+spot_fl_control:
   ros__parameters:
-    type: ros2_impedance_controller/CartesianController
+    type: ros2_impedance_controller/MPCIController
     joints:
       - fl_hipx
       - fl_hipy
       - fl_knee
     base_link: body
     interaction_link: fl_foot
-    # TBD: Whole-Body Controller
-    stiffness: [700.0, 700.0, 1000.0, 0.0, 0.0, 0.0]
-    damping: [52.0, 52.0, 63.0, 0.0, 0.0, 0.0]
-    taskspace_mass: 0.0
+    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
+    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
     urdf_package: ros2_descriptions
-    urdf_relative_path: /description/urdf/spot.description.urdf.xacro
+    urdf_relative_path: /description/urdf/spot_fl.description.urdf.xacro
     visualize_reference: true
+    torque_max: 140.0
+    slew_limit: 0.9
+    timestep: 0.001
+    horizon: 30
+
+spot_fr_control:
+  ros__parameters:
+    type: ros2_impedance_controller/MPCIController
+    joints:
+      - fr_hipx
+      - fr_hipy
+      - fr_knee
+    base_link: body
+    interaction_link: fr_foot
+    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
+    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/spot_fr.description.urdf.xacro
+    visualize_reference: true
+    torque_max: 140.0
+    slew_limit: 0.9
+    timestep: 0.001
+    horizon: 30
+
+spot_hl_control:
+  ros__parameters:
+    type: ros2_impedance_controller/MPCIController
+    joints:
+      - hl_hipx
+      - hl_hipy
+      - hl_knee
+    base_link: body
+    interaction_link: hl_foot
+    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
+    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/spot_hl.description.urdf.xacro
+    visualize_reference: true
+    torque_max: 140.0
+    slew_limit: 0.9
+    timestep: 0.001
+    horizon: 30
+
+spot_hr_control:
+  ros__parameters:
+    type: ros2_impedance_controller/MPCIController
+    joints:
+      - hr_hipx
+      - hr_hipy
+      - hr_knee
+    base_link: body
+    interaction_link: hr_foot
+    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
+    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/spot_hr.description.urdf.xacro
+    visualize_reference: true
+    torque_max: 140.0
+    slew_limit: 0.9
+    timestep: 0.001
+    horizon: 30

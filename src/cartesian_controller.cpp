@@ -309,6 +309,8 @@ void CartesianController::zspace_regression()
     ls_out_ * ls_input_.transpose() * (ls_input_ * ls_input_.transpose()).inverse();
 
   ls_b_.noalias() = ls_S_lambda_.rightCols<1>();  // S_lambda_ last column
+
+  // TODO(@me): ls_b_ is near zero, but requires LPF
 }
 
 }  // namespace ros2_impedance_controller
