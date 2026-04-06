@@ -4,9 +4,17 @@
 
 Robot impedance controller designed with the `ros2_control` framework and Pinocchio. Default branch ROS2 distro: Jazzy
 
-- Custom build dependency: [kinematic_pose_msgs](https://github.com/qleonardolp/kinematic_pose_msgs)
-- Tailored robot descriptions: [ros2_descriptions](https://github.com/qleonardolp/ros2_descriptions)
-- Handy reference generator: [robot_impedance_analyzer](https://github.com/qleonardolp/robot_impedance_analyzer/tree/v1.2.0)
+1. Clone this repo;
+
+2. Install build dependencies with:
+
+```console
+rosdep install --from-paths src -y --ignore-src
+```
+
+3. For simulations with Gazebo Harmonic, consider use my robot descriptions in [ros2_descriptions](https://github.com/qleonardolp/ros2_descriptions);
+
+4. For a handful control reference signal generator use my package [robot_impedance_analyzer](https://github.com/qleonardolp/robot_impedance_analyzer/tree/v1.2.0).
 
 ## Instructions
 
