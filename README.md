@@ -16,27 +16,7 @@ rosdep install --from-paths src -y --ignore-src
 
 4. For a handful control reference signal generator use my package [robot_impedance_analyzer](https://github.com/qleonardolp/robot_impedance_analyzer/tree/v1.2.0).
 
-## Installing qpOASES
-
-The _Model Predictive Impedance Control_ (MPIC) relies on the `qpOASES` library to solve the QP problem.
-
-Clone and checkout the tag:
-
-  ```bash
-  git clone https://github.com/coin-or/qpOASES.git
-  cd qpOASES && git checkout releases/3.2.2
-  ```
-
-Build and install:
-
-  ```bash
-  mkdir build && cd build
-  cmake .. -D CMAKE_CXX_FLAGS="-fPIC"
-  make
-  sudo make install
-  ```
-
-## Instructions
+## Simulation instructions
 
 ### Simulation with Robotic Arm
 
@@ -65,6 +45,26 @@ ros2 control set_controller_state spot_leg_controller active
 ```bash
 ros2 launch ros2_impedance_controller simulation.launch.py robot:=hyl controller:=hyl_controller
 ```
+
+## Installing qpOASES
+
+The _Model Predictive Cartesian Impedance Controller_ (MPCIC) relies on the `qpOASES` library to solve the QP problem.
+
+Clone and checkout the tag:
+
+  ```bash
+  git clone https://github.com/coin-or/qpOASES.git
+  cd qpOASES && git checkout releases/3.2.2
+  ```
+
+Build and install:
+
+  ```bash
+  mkdir build && cd build
+  cmake .. -D CMAKE_CXX_FLAGS="-fPIC"
+  make
+  sudo make install
+  ```
 
 ## About
 
