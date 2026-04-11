@@ -68,13 +68,14 @@ controller_interface::CallbackReturn BasicCartesianController::read_parameters()
 
 void BasicCartesianController::custom_configuration()
 {
-  status_msg_.data.resize(18, 0.0);
+  status_msg_.data.resize(24, 0.0);
   // Initialize dynamic Eigen members
   tau_desired_.resize(get_dof());
   accel_feedforward_.resize(get_dof());
   jacobian_pinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
   jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
   jsim_jpinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
+  jacobian_dt_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
 }
 
 void BasicCartesianController::custom_activation()
@@ -102,10 +103,17 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
     estimated_wrench_.noalias() = jacobianT_pinv_ * (robot_efforts_ - effort_commands_);
   }
 
+  pinocchio::getFrameJacobianTimeVariation(
+    robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
+    jacobian_dt_);
+
+  // Compute `interaction_link` task space acceleration
+  actual_accel_.noalias() = jacobian_ * robot_ddq_ + jacobian_dt_ * robot_dq_;
+  accel_deviation_.noalias() = actual_accel_ - desired_pose_accel_;
+
   robot_data_->M.triangularView<Eigen::StrictlyLower>() =
     robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
-
   actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
 
   impedance_wrench_.noalias() =
@@ -138,10 +146,27 @@ void BasicCartesianController::publish_status()
   // Impedance I/O power
   status_msg_.data[5] = twist_deviation_.transpose() * impedance_wrench_;
 
-  actual_pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
-  status_msg_.data[6] = actual_pose_(0);
-  status_msg_.data[7] = actual_pose_(1);
-  status_msg_.data[8] = actual_pose_(2);
+  // Impedance space:
+  status_msg_.data[6] = pose_deviation_(0);
+  status_msg_.data[7] = pose_deviation_(1);
+  status_msg_.data[8] = pose_deviation_(2);
+  status_msg_.data[9] = pose_deviation_(3);
+  status_msg_.data[10] = pose_deviation_(4);
+  status_msg_.data[11] = pose_deviation_(5);
+
+  status_msg_.data[12] = twist_deviation_(0);
+  status_msg_.data[13] = twist_deviation_(1);
+  status_msg_.data[14] = twist_deviation_(2);
+  status_msg_.data[15] = twist_deviation_(3);
+  status_msg_.data[16] = twist_deviation_(4);
+  status_msg_.data[17] = twist_deviation_(5);
+
+  status_msg_.data[18] = accel_deviation_(0);
+  status_msg_.data[19] = accel_deviation_(1);
+  status_msg_.data[20] = accel_deviation_(2);
+  status_msg_.data[21] = accel_deviation_(3);
+  status_msg_.data[22] = accel_deviation_(4);
+  status_msg_.data[23] = accel_deviation_(5);
 
   status_rt_publisher_->try_publish(status_msg_);
 }

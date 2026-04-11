@@ -87,11 +87,14 @@ protected:
   Vector6d impedance_wrench_;
   // Interaction wrench estimation
   Vector6d estimated_wrench_;
+  // End effector task space twist derivative
+  Vector6d accel_deviation_;
 
   // Command terms
   VectorXd accel_feedforward_;
   VectorXd tau_desired_;
 
+  Eigen::MatrixXd jacobian_dt_;
   Eigen::MatrixXd jacobian_pinv_;
   Eigen::MatrixXd jacobianT_pinv_;
   Eigen::MatrixXd jsim_jpinv_;
