@@ -1,9 +1,11 @@
 <sdf version='1.10'>
-  <world name='Benchmark'>
-    <physics name='1ms' type='ignored'>
+  <world name='LeggedBenchmark'>
+    <physics name='default_physics' type='dart'>
       <max_step_size>0.001</max_step_size>
-      <real_time_factor>1</real_time_factor>
-      <real_time_update_rate>1000</real_time_update_rate>
+      <real_time_factor>1.0</real_time_factor>
+      <dart>
+        <collision_detector>bullet</collision_detector>
+      </dart>
     </physics>
     <plugin name='gz::sim::systems::Physics' filename='gz-sim-physics-system'/>
     <plugin name='gz::sim::systems::UserCommands' filename='gz-sim-user-commands-system'/>

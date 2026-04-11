@@ -11,7 +11,7 @@ ur5_controller:
     base_link: base_link
     interaction_link: ee_link
     ft_sensor_topic: end_effector_ft_sensor
-    stiffness: [400.0, 800.0, 800.0, 100.0, 150.0, 120.0]
+    stiffness: [490.0, 810.0, 810.0, 120.0, 225.0, 180.0]
     taskspace_mass: 10.0
     # stiffness: [400.0, 400.0, 400.0, 70.0, 70.0, 40.0]  # TODO: tuning
     # damping: [134.16, 134.16, 134.16, 15.086, 15.086, 15.086]
@@ -81,8 +81,8 @@ ur5_mpc:
     base_link: base_link
     interaction_link: ee_link
     ft_sensor_topic: end_effector_ft_sensor
-    stiffness: [400.0, 400.0, 400.0, 70.0, 70.0, 40.0]  # TODO: tuning
-    damping: [134.16, 134.16, 134.16, 15.086, 15.086, 15.086]
+    stiffness: [490.0, 810.0, 810.0, 120.0, 225.0, 180.0]
+    damping: [140.0, 180.0, 180.0, 18.6226, 25.5, 22.8079]
     urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
     urdf_package: ros2_descriptions
     visualize_reference: true

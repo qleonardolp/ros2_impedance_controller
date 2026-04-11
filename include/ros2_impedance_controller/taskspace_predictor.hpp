@@ -165,12 +165,19 @@ private:
   // Task space Coriolis
   Matrix6d task_coriolis_;
 
+  // Geometric Jacobian
+  Eigen::MatrixXd geometric_jacobian_;
+  // Jacobian Transform
+  Matrix6d jlog3_transform_;
+  // Log map from SO(3) to Lie. 'Lower' part of the Jacobian Transform.
+  Eigen::Matrix3d jlog3_;
+  // Composed Jacobian with Lie Algebra to properly map the SO(3) time integral
   Eigen::MatrixXd jacobian_;
-  Eigen::MatrixXd jacobian_inv_;
-  Eigen::MatrixXd jacobianT_inv_;
-  Eigen::MatrixXd jacobian_dt_;  // Jacobian derivative
+  Eigen::MatrixXd jacobian_inv_;   // Composed Jacobian inverse
+  Eigen::MatrixXd jacobianT_inv_;  // Composed Jacobian transpose inverse
+  Eigen::MatrixXd jacobian_dt_;    // Composed Jacobian derivative
 
-  Eigen::MatrixXd jacobianN_;  // Jacobian `stack` over the horizon
+  Eigen::MatrixXd jacobianN_;  // Composed Jacobian `stack` over the horizon
   Eigen::MatrixXd coriolisN_;  // Task Coriolis `stack` over the horizon
   Eigen::VectorXd gravityN_;   // Task gravity vector `stack` over the horizon
   Eigen::VectorXd robot_g_;    // Joint gravity over the horizon

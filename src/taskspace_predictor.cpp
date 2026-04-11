@@ -32,6 +32,8 @@ TaskspacePredictor::TaskspacePredictor(
   jacobian_ = Eigen::MatrixXd::Zero(kCartesianDim, dof_);
   jacobianT_inv_ = Eigen::MatrixXd::Zero(kCartesianDim, dof_);
   jacobianN_ = Eigen::MatrixXd::Zero(kCartesianDim * horizon, dof_ * horizon);
+  geometric_jacobian_ = Eigen::MatrixXd::Zero(kCartesianDim, dof_);
+  jlog3_transform_.setIdentity();
 
   jacobian_dt_ = Eigen::MatrixXd::Zero(kCartesianDim, dof_);
   jacobian_inv_ = Eigen::MatrixXd::Zero(dof_, kCartesianDim);
@@ -152,11 +154,18 @@ void TaskspacePredictor::assemble_G()
 
 void TaskspacePredictor::update_jacobian()
 {
-  // TODO(@qleonardolp): refact the Jacobian computation to use
-  // Lie Algebra with pinocchio::Jlog3(phi)
   pinocchio::computeFrameJacobian(
-    robot_, *data_.get(), robot_q_, ee_frame_, pinocchio::LOCAL_WORLD_ALIGNED, jacobian_);
+    robot_, *data_.get(), robot_q_, ee_frame_, pinocchio::LOCAL_WORLD_ALIGNED, geometric_jacobian_);
 
+  // Compute Jlog3 for the ee_frame_
+  pinocchio::forwardKinematics(robot_, *data_.get(), robot_q_, robot_dq_);
+  pinocchio::updateFramePlacement(robot_, *data_.get(), ee_frame_);
+  pinocchio::Jlog3(data_.get()->oMf[ee_frame_].rotation(), jlog3_);
+
+  jlog3_transform_.block(3, 3, 3, 3) = jlog3_.inverse();
+  jacobian_ = jlog3_transform_ * geometric_jacobian_;
+
+  // TODO(@qleonardolp): refact dJ/dt with the Lie map
   pinocchio::getFrameJacobianTimeVariation(
     robot_, *data_.get(), ee_frame_, pinocchio::LOCAL_WORLD_ALIGNED, jacobian_dt_);
 
