@@ -142,7 +142,7 @@ void BasicCartesianController::publish_status()
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative
-  status_msg_.data[4] = hamiltonian_derivative_;
+  status_msg_.data[4] = desired_inertia_(3, 3);  // trying to visualize m_zz
   // Impedance I/O power
   status_msg_.data[5] = twist_deviation_.transpose() * impedance_wrench_;
 
