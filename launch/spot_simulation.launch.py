@@ -28,7 +28,7 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "gz_gui",
-            default_value="false",
+            default_value="true",
             description="Start Gazebo GUI. The default behavior"
             + " starts gazebo in server mode using Rviz2 as graphical interface.",
         )
@@ -47,7 +47,7 @@ def generate_launch_description():
     gazebo_world = PathJoinSubstitution(
         [package_share, "worlds", [LaunchConfiguration("world"), ".sdf"]]
     )
-    bridges = PathJoinSubstitution([package_share, "config", "ros_gz_bridge_clock_only.yaml"])
+    bridges = PathJoinSubstitution([package_share, "config", "ros_gz_bridge_spot.yaml"])
     controllers_config = PathJoinSubstitution([package_share, "config", "controllers.yaml"])
     rviz_config = PathJoinSubstitution([package_share, "config", "spot_rviz.rviz"])
 
@@ -109,6 +109,18 @@ def generate_launch_description():
         output="screen",
         parameters=[{"robot_description": robot_urdf}],
     )
+    # Anchor the original TF on the Gazebo model pose
+    static_transform = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="static_transform",
+        arguments=[
+            "--frame-id",
+            "spot",
+            "--child-frame-id",
+            "body_dummy",
+        ],
+    )
 
     # Robot spawner in Gazebo.
     # This node indirectly uses the robot_urdf parsed here,
@@ -117,10 +129,7 @@ def generate_launch_description():
         package="ros_gz_sim",
         executable="create",
         output="log",
-        arguments=[
-            "-topic",
-            "/robot_description",
-        ],
+        arguments=["-topic", "/robot_description"],
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -143,9 +152,8 @@ def generate_launch_description():
         package="rviz2",
         executable="rviz2",
         name="rviz2",
-        output="log",
         arguments=["-d", rviz_config],
-        condition=UnlessCondition(gz_gui),
+        # condition=UnlessCondition(gz_gui),
     )
 
     nodes = [
@@ -153,6 +161,7 @@ def generate_launch_description():
         gazebo_headless,
         gazebo_bridge,
         robot_state_publisher,
+        static_transform,
         gz_entity_spawner,
         joint_state_broadcaster_spawner,
         controllers_spawner,

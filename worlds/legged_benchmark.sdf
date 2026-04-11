@@ -1,5 +1,5 @@
 <sdf version='1.10'>
-  <world name='LeggedBenchmark'>
+  <world name='legged_world'>
     <physics name='default_physics' type='dart'>
       <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
