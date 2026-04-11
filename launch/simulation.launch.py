@@ -55,6 +55,13 @@ def generate_launch_description():
             description="Gazebo world. See worlds directory.",
         )
     )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "is_fixed",
+            default_value="true",
+            description="Set the URDF in fixed (test stand) configuration.",
+        )
+    )
 
     # Arguments variables
     gz_gui = LaunchConfiguration("gz_gui")
@@ -111,6 +118,8 @@ def generate_launch_description():
                     [robot_model, ".urdf.xacro"],
                 ]
             ),
+            " fixed:=",
+            LaunchConfiguration("is_fixed"),
         ]
     )
 
