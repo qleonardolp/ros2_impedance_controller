@@ -63,11 +63,6 @@ protected:
   void publish_status() override;
 
   /**
-   * @brief Phase space diagnostics.
-   */
-  void phase_space_diagnostics();
-
-  /**
    * @brief Compute Cartesian impedance Hamiltonian function
    */
   void compute_hamiltonian();

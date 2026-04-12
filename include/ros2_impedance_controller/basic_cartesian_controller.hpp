@@ -56,17 +56,6 @@ protected:
   void publish_status() override;
 
   /**
-   * @brief Impedance space diagnostics with pose_deviation_, twist_deviation_,
-   * and interaction wrench estimation.
-   */
-  void zspace_diagnostics();
-
-  /**
-   * @brief Phase space diagnostics.
-   */
-  void phase_space_diagnostics();
-
-  /**
    * @brief Compute Cartesian impedance Hamiltonian function
    */
   void compute_hamiltonian();

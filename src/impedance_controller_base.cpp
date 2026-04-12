@@ -307,7 +307,10 @@ bool ImpedanceControllerBase::update_robot()
   robot_ddq_filt_ = acc_lpf_alpha_ * robot_ddq_ + (1.0 - acc_lpf_alpha_) * robot_ddq_filt_;
 
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_q_, robot_dq_);
-  pinocchio::computeMinverse(robot_model_, *robot_data_.get(), robot_q_);
+  // fill M(q)
+  robot_data_->M.triangularView<Eigen::StrictlyLower>() =
+    robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
+
   return true;
 }
 

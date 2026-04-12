@@ -111,8 +111,6 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   actual_accel_.noalias() = jacobian_ * robot_ddq_ + jacobian_dt_ * robot_dq_;
   accel_deviation_.noalias() = actual_accel_ - desired_pose_accel_;
 
-  robot_data_->M.triangularView<Eigen::StrictlyLower>() =
-    robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
 
@@ -142,7 +140,7 @@ void BasicCartesianController::publish_status()
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative
-  status_msg_.data[4] = desired_inertia_(3, 3);  // trying to visualize m_zz
+  status_msg_.data[4] = actual_inertia_(2, 2);  // trying to visualize m_zz
   // Impedance I/O power
   status_msg_.data[5] = twist_deviation_.transpose() * impedance_wrench_;
 
@@ -169,70 +167,6 @@ void BasicCartesianController::publish_status()
   status_msg_.data[23] = accel_deviation_(5);
 
   status_rt_publisher_->try_publish(status_msg_);
-}
-
-void BasicCartesianController::zspace_diagnostics()
-{
-  /*
-    if (status_rt_publisher_->trylock())
-    {
-      status_rt_publisher_->msg_.pose.position.x = pose_deviation_(0);
-      status_rt_publisher_->msg_.pose.position.y = pose_deviation_(1);
-      status_rt_publisher_->msg_.pose.position.z = pose_deviation_(2);
-      // Using the quaternion vector as the angles
-      status_rt_publisher_->msg_.pose.orientation.x = pose_deviation_(3);
-      status_rt_publisher_->msg_.pose.orientation.y = pose_deviation_(4);
-      status_rt_publisher_->msg_.pose.orientation.z = pose_deviation_(5);
-
-      status_rt_publisher_->msg_.pose_twist.linear.x = twist_deviation_(0);
-      status_rt_publisher_->msg_.pose_twist.linear.y = twist_deviation_(1);
-      status_rt_publisher_->msg_.pose_twist.linear.z = twist_deviation_(2);
-      status_rt_publisher_->msg_.pose_twist.angular.x = twist_deviation_(3);
-      status_rt_publisher_->msg_.pose_twist.angular.y = twist_deviation_(4);
-      status_rt_publisher_->msg_.pose_twist.angular.z = twist_deviation_(5);
-
-      status_rt_publisher_->msg_.pose_accel.linear.x = estimated_wrench_(0);
-      status_rt_publisher_->msg_.pose_accel.linear.y = estimated_wrench_(1);
-      status_rt_publisher_->msg_.pose_accel.linear.z = estimated_wrench_(2);
-      status_rt_publisher_->msg_.pose_accel.angular.x = estimated_wrench_(3);
-      status_rt_publisher_->msg_.pose_accel.angular.y = estimated_wrench_(4);
-      status_rt_publisher_->msg_.pose_accel.angular.z = estimated_wrench_(5);
-
-      status_rt_publisher_->unlockAndPublish();
-    }
-  */
-}
-
-void BasicCartesianController::phase_space_diagnostics()
-{
-  status_msg_.data[0] = pose_deviation_(0);
-  status_msg_.data[1] = pose_deviation_(1);
-  status_msg_.data[2] = pose_deviation_(2);
-  // Using the quaternion vector as the angles
-  status_msg_.data[3] = pose_deviation_(3);
-  status_msg_.data[4] = pose_deviation_(4);
-  status_msg_.data[5] = pose_deviation_(5);
-
-  status_msg_.data[6] = twist_deviation_(0);
-  status_msg_.data[7] = twist_deviation_(1);
-  status_msg_.data[8] = twist_deviation_(2);
-  status_msg_.data[9] = twist_deviation_(3);
-  status_msg_.data[10] = twist_deviation_(4);
-  status_msg_.data[11] = twist_deviation_(5);
-
-  robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
-    robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
-
-  // Phase space (q,p) divergence
-  // First term:
-  // status_msg_.data[12] = -(jsim_jpinv_dj_ * robot_data_->Minv).trace();
-
-  // TODO(@qleonardolp) investigate the trace for non square matrices (nDoF < m)
-  // Eigen::DiagonalMatrix<double, Eigen::Dynamic, kCartesianDim> damping(
-  //   desired_damping_.diagonal().segment(0, get_dof()));
-
-  // Second term:
-  status_msg_.data[13] = -(desired_damping_ * jacobian_ * robot_data_->Minv).trace();
 }
 
 void BasicCartesianController::compute_hamiltonian()

@@ -304,38 +304,6 @@ void MPCIController::publish_status()
   status_rt_publisher_->try_publish(status_msg_);
 }
 
-void MPCIController::phase_space_diagnostics()
-{
-  status_msg_.data[0] = pose_deviation_(0);
-  status_msg_.data[1] = pose_deviation_(1);
-  status_msg_.data[2] = pose_deviation_(2);
-  // Using the quaternion vector as the angles
-  status_msg_.data[3] = pose_deviation_(3);
-  status_msg_.data[4] = pose_deviation_(4);
-  status_msg_.data[5] = pose_deviation_(5);
-
-  status_msg_.data[6] = twist_deviation_(0);
-  status_msg_.data[7] = twist_deviation_(1);
-  status_msg_.data[8] = twist_deviation_(2);
-  status_msg_.data[9] = twist_deviation_(3);
-  status_msg_.data[10] = twist_deviation_(4);
-  status_msg_.data[11] = twist_deviation_(5);
-
-  robot_data_->Minv.triangularView<Eigen::StrictlyLower>() =
-    robot_data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
-
-  // Phase space (q,p) divergence
-  // First term:
-  // status_msg_.data[12] = -(jsim_jpinv_dj_ * robot_data_->Minv).trace();
-
-  // TODO(@qleonardolp) investigate the trace for non square matrices (nDoF < m)
-  // Eigen::DiagonalMatrix<double, Eigen::Dynamic, kCartesianDim> damping(
-  //   desired_damping_.diagonal().head<dof_>());
-
-  // Second term:
-  status_msg_.data[13] = -(desired_damping_ * jacobian_ * robot_data_->Minv).trace();
-}
-
 void MPCIController::compute_hamiltonian()
 {
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();

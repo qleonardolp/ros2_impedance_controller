@@ -164,8 +164,6 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
   actual_accel_.noalias() = jacobian_ * robot_ddq_ + jacobian_dt_ * robot_dq_;
   accel_deviation_.noalias() = actual_accel_ - desired_pose_accel_;
 
-  robot_data_->M.triangularView<Eigen::StrictlyLower>() =
-    robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   jsim_jpinv_dj_ = jsim_jpinv_ * jacobian_dt_;
 
