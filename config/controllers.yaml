@@ -112,7 +112,7 @@ spot_fl_control:
     torque_max: 140.0
     slew_limit: 0.9
     timestep: 0.004
-    horizon: 10
+    horizon: 7
 
 spot_fr_control:
   ros__parameters:
@@ -133,7 +133,7 @@ spot_fr_control:
     torque_max: 140.0
     slew_limit: 0.9
     timestep: 0.004
-    horizon: 10
+    horizon: 7
 
 spot_hl_control:
   ros__parameters:
@@ -154,7 +154,7 @@ spot_hl_control:
     torque_max: 140.0
     slew_limit: 0.9
     timestep: 0.004
-    horizon: 10
+    horizon: 7
 
 spot_hr_control:
   ros__parameters:
@@ -175,4 +175,4 @@ spot_hr_control:
     torque_max: 140.0
     slew_limit: 0.9
     timestep: 0.004
-    horizon: 10
+    horizon: 7

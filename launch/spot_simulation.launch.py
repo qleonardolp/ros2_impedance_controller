@@ -152,7 +152,7 @@ def generate_launch_description():
         executable="spawner",
         arguments=[
             *spot_controllers,
-            "--inactive",  # activate-as-group
+            "--activate-as-group",
             "--param-file",
             controllers_config,
         ],
