@@ -81,11 +81,19 @@ def generate_launch_description():
     )
 
     # ROS-Gazebo bridges
-    gazebo_bridge = Node(
+    gz_bridge_with_pose = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
         parameters=[{"config_file": bridges}],
-        output="screen",
+        condition=UnlessCondition(gz_gui),
+    )
+
+    gz_bridge_clock_only = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        arguments=["/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock"],
+        remappings=[("/clock", "/clock")],
+        condition=IfCondition(gz_gui),
     )
 
     # Get URDF via xacro
@@ -120,6 +128,7 @@ def generate_launch_description():
             "--child-frame-id",
             "body_dummy",
         ],
+        condition=UnlessCondition(gz_gui),
     )
 
     # Robot spawner in Gazebo.
@@ -143,7 +152,7 @@ def generate_launch_description():
         executable="spawner",
         arguments=[
             *spot_controllers,
-            "--inactive",
+            "--inactive",  # activate-as-group
             "--param-file",
             controllers_config,
         ],
@@ -153,13 +162,14 @@ def generate_launch_description():
         executable="rviz2",
         name="rviz2",
         arguments=["-d", rviz_config],
-        # condition=UnlessCondition(gz_gui),
+        condition=UnlessCondition(gz_gui),
     )
 
     nodes = [
         gazebo,
         gazebo_headless,
-        gazebo_bridge,
+        gz_bridge_with_pose,
+        gz_bridge_clock_only,
         robot_state_publisher,
         static_transform,
         gz_entity_spawner,
