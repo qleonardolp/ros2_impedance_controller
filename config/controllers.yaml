@@ -53,6 +53,8 @@ hyl_controller:
 mpc_controller:
   ros__parameters:
     type: ros2_impedance_controller/MPCIController
+    is_async: true
+    update_rate: 250
     joints:
       - hfe_joint
       - kfe_joint
@@ -65,8 +67,8 @@ mpc_controller:
     visualize_reference: true
     torque_max: 140.0  # from HyL URDF
     slew_limit: 0.9
-    timestep: 0.002
-    horizon: 15
+    timestep: 0.004
+    horizon: 7
 
 ur5_mpc:
   ros__parameters:
@@ -91,7 +93,7 @@ ur5_mpc:
     torque_max: 150.0  # this one has different limits for half of the joints
     slew_limit: 0.9
     timestep: 0.004
-    horizon: 10
+    horizon: 5
 
 spot_fl_control:
   ros__parameters:
