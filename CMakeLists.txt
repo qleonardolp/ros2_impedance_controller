@@ -139,7 +139,7 @@ endif()
 pluginlib_export_plugin_description_file(controller_interface ros2_impedance_controller.xml)
 
 install(
-  DIRECTORY config launch worlds
+  DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 

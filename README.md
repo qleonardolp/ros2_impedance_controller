@@ -15,43 +15,16 @@ The `ros2_impedance_controller` is meant to be a robot-agnostic, fully ROS2 ecos
 
 ## Features
 
-By making a slight modification to your URDF, you can use the impedance controller with any rigid-body leg or manipulator. Check the URDF section in the [documentation](doc/ros2_impedance_controller_documentation.pdf) to understand _how_ and _why_ adequate your robot description to use with the available controllers. For a quick first try with Gazebo Harmonic, consider using my robot descriptions in [ros2_descriptions](https://github.com/qleonardolp/ros2_descriptions).
+By making a slight modification to your URDF, you can use the impedance controller with any rigid-body leg or manipulator. Check the URDF section in the [documentation](doc/ros2_impedance_controller_documentation.pdf) to understand _how_ and _why_ adequate your robot description to use with the available controllers. For a quick first try with Gazebo Harmonic, consider using my robot descriptions in [ros2_descriptions](https://github.com/qleonardolp/ros2_descriptions), and my simulation settings in [robot_impedance_lab](https://github.com/qleonardolp/robot_impedance_lab).
 
 According to the classical impedance definitions, the controller input is the end-effector pose and its derivatives. For easy standardization, this input type is the [`kinematic_pose_msgs`](https://github.com/qleonardolp/kinematic_pose_msgs). The package [robot_impedance_analyzer](https://github.com/qleonardolp/robot_impedance_analyzer/) can be used for control analysis with single-axis parametric inputs such as step, sine and square waves, PRBS and others.
 
-## Simulation instructions
-
-### Simulation with Robotic Arm
-
-Use launcher default arguments:
-
-```bash
-ros2 launch ros2_impedance_controller simulation.launch.py
-```
-
-```bash
-ros2 control set_controller_state ur5_controller active
-```
-
-### Simulation with Spot leg
-
-```bash
-ros2 launch ros2_impedance_controller simulation.launch.py robot:=spot_leg controller:=spot_leg_controller
-```
-
-```bash
-ros2 control set_controller_state spot_leg_controller active
-```
-
-### Simulation with Hydraulic Leg (HyL)
-
-```bash
-ros2 launch ros2_impedance_controller simulation.launch.py robot:=hyl controller:=hyl_controller
-```
-
 ## Installing qpOASES (optional)
 
-The _Model Predictive Cartesian Impedance Controller_ (MPCIC) relies on the `qpOASES` library to solve the QP problem.
+The _Model Predictive Cartesian Impedance Controller_ (MPCIC) uses `qpOASES` to solve the QP problem.
+
+> [!WARNING]
+> MPCIC is in development phase.
 
 Clone and checkout the tag:
 
