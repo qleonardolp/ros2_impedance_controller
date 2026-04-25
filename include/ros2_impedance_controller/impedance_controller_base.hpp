@@ -261,6 +261,7 @@ private:
   std::vector<hardware_interface::LoanedCommandInterface *> effort_command_interfaces_;
 
   size_t degrees_of_freedom_{1};
+  bool blank_reference_{true};
 };
 
 }  // namespace ros2_impedance_controller

@@ -21,12 +21,12 @@ cartesian_controller:
   }
   stiffness: {
     type: double_array,
-    default_value: [1000.0, 1000.0, 1000.0, 300.0, 300.0, 300.0],
+    default_value: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     description: "Cartesian stiffness gains [N/m, N/m, N/m, Nm/rad, Nm/rad, Nm/rad]",
   }
   damping: {
     type: double_array,
-    default_value: [],
+    default_value: [10.0, 10.0, 10.0, 1.0, 1.0, 1.0],
     description: "Cartesian damping gains [N.s/m, N.s/m, N.s/m, Nm.s/rad, Nm.s/rad, Nm.s/rad]",
   }
   taskspace_mass: {

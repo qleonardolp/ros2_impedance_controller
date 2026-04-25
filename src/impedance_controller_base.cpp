@@ -207,9 +207,9 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   }
 
   custom_activation();  // Derived class-specific activation
-
   RCLCPP_WARN(logger, "Activated successfully!");
 
+  blank_reference_ = true;
   clock_time_last_ = get_node()->get_clock()->now();
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -321,23 +321,20 @@ void ImpedanceControllerBase::update_deviation_and_reference()
 
   actual_twist_.noalias() = jacobian_ * robot_dq_;
 
-  double position_norm1_ = 0;
   auto ref_optional = rt_reference_.try_get();
 
   if (ref_optional.has_value())
-  {
-    reference_ = ref_optional.value();
-    position_norm1_ = abs(reference_.pose.position.x) + abs(reference_.pose.position.y) +
-                      abs(reference_.pose.position.z);
-  }
-
-  if (ref_optional.has_value() && position_norm1_ > std::numeric_limits<double>::epsilon())
   {
     reference_ = ref_optional.value();
 
     desired_position_.x() = reference_.pose.position.x;
     desired_position_.y() = reference_.pose.position.y;
     desired_position_.z() = reference_.pose.position.z;
+
+    if (!desired_position_.isZero(1e-9))
+    {
+      blank_reference_ = false;
+    }
 
     desired_quaternion_.w() = reference_.pose.orientation.w;
     desired_quaternion_.x() = reference_.pose.orientation.x;
@@ -350,6 +347,16 @@ void ImpedanceControllerBase::update_deviation_and_reference()
     pose_deviation_.tail<3>().noalias() = pinocchio::log3(
       robot_data_.get()->oMf[end_effector_frame_].rotation() *
       desired_quaternion_.toRotationMatrix().transpose());
+
+    // When no one is publishing on ~/reference topic,
+    // reference_.pose is zero. However, we don't want
+    // the controller pulling the end-effector to (0,0,0)
+    // as soon as we activate it without publish on its
+    // reference topic.
+    if (blank_reference_)
+    {
+      pose_deviation_.setZero();
+    }
 
     desired_twist_(0) = reference_.pose_twist.linear.x;
     desired_twist_(1) = reference_.pose_twist.linear.y;
