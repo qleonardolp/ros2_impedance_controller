@@ -40,6 +40,12 @@ cartesian_controller:
       gt_eq<>: [0.0]
     }
   }
+  gravity_compensation: {
+    type: bool,
+    default_value: true,
+    description: "Enable gravity compensation feedforward term.",
+    read_only: true,
+  }
   urdf_package: {
     type: string,
     default_value: "",

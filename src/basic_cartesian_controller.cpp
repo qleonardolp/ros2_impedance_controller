@@ -68,7 +68,9 @@ controller_interface::CallbackReturn BasicCartesianController::read_parameters()
 
 void BasicCartesianController::custom_configuration()
 {
-  status_msg_.data.resize(24, 0.0);
+  steady_clock_ = std::make_shared<rclcpp::Clock>(RCL_STEADY_TIME);
+  status_msg_.data.resize(25, 0.0);
+
   // Initialize dynamic Eigen members
   tau_desired_.resize(get_dof());
   accel_feedforward_.resize(get_dof());
@@ -95,6 +97,7 @@ void BasicCartesianController::custom_activation()
 
 controller_interface::CallbackReturn BasicCartesianController::update_effort_commands()
 {
+  update_start_ = steady_clock_->now();
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
 
@@ -120,12 +123,18 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
 
   accel_feedforward_ = jsim_jpinv_ * desired_pose_accel_;
-  tau_desired_.noalias() =
-    jacobian_.transpose() * impedance_wrench_ + accel_feedforward_ + robot_data_->g;
+  tau_desired_.noalias() = jacobian_.transpose() * impedance_wrench_ + accel_feedforward_;
+
+  if (params_.gravity_compensation)
+  {
+    tau_desired_ += robot_data_->g;
+  }
 
   effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
 
   compute_hamiltonian();
+
+  update_end_ = steady_clock_->now();
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -165,6 +174,8 @@ void BasicCartesianController::publish_status()
   status_msg_.data[21] = accel_deviation_(3);
   status_msg_.data[22] = accel_deviation_(4);
   status_msg_.data[23] = accel_deviation_(5);
+
+  status_msg_.data[24] = (update_end_ - update_start_).seconds();
 
   status_rt_publisher_->try_publish(status_msg_);
 }

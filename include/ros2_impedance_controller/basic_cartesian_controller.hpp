@@ -63,6 +63,12 @@ protected:
   std::shared_ptr<::cartesian_controller::ParamListener> param_listener_;
   ::cartesian_controller::Params params_;
 
+  rclcpp::Clock::SharedPtr steady_clock_;
+  // `update_effort_commands` start
+  rclcpp::Time update_start_;
+  // `update_effort_commands` end
+  rclcpp::Time update_end_;
+
   /* Port-Hamiltonian variables */
   // Impedance Hamiltonian function value
   double hamiltonian_{0};

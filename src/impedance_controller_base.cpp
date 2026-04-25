@@ -107,7 +107,7 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_configure(
   effort_commands_.resize(degrees_of_freedom_);
   jacobian_ = Matrix6Xd::Zero(kCartesianDim, degrees_of_freedom_);
 
-  custom_configuration();
+  custom_configuration();  // Derived class-specific configuration
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -205,8 +205,8 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
       return CallbackReturn::ERROR;
     }
   }
-  // Reset reference buffer...
-  custom_activation();
+
+  custom_activation();  // Derived class-specific activation
 
   RCLCPP_WARN(logger, "Activated successfully!");
 
@@ -241,8 +241,7 @@ controller_interface::return_type ImpedanceControllerBase::update(
 
   update_deviation_and_reference();
 
-  // Call derived class controller control law here
-  update_effort_commands();
+  update_effort_commands();  // Derived class-specific control law
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
@@ -253,7 +252,7 @@ controller_interface::return_type ImpedanceControllerBase::update(
     }
   }
 
-  publish_status();
+  publish_status();  // Derived class-specific diagnostic publisher
   clock_time_last_ = time;
   return controller_interface::return_type::OK;
 }
@@ -380,7 +379,7 @@ void ImpedanceControllerBase::configure_visualization_marker()
 {
   marker_ = visualization_msgs::msg::Marker();
   marker_.header.frame_id = base_link_name_.c_str();
-  marker_.ns = "impedance_controller/reference";
+  marker_.ns = get_node()->get_name();
   marker_.id = 23;  // Random ID
   marker_.type = visualization_msgs::msg::Marker::LINE_LIST;
   marker_.action = visualization_msgs::msg::Marker::MODIFY;
