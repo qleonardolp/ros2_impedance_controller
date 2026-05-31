@@ -1,0 +1,16 @@
+test_load_controller:
+  ros__parameters:
+    joints:
+      - g_joint
+      - f_joint
+      - e_joint
+      - d_joint
+      - c_joint
+      - b_joint
+    base_link: base_link
+    interaction_link: jaws_base_link
+    stiffness: [100.0, 100.0, 100.0, 0.0, 0.0, 0.0]
+    damping: [20.0, 20.0, 20.0, 0.0, 0.0, 0.0]
+    urdf_package: ros2_impedance_controller
+    urdf_relative_path: /test/test_load.urdf.xacro
+    has_effort_states: false

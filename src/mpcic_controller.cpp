@@ -86,7 +86,7 @@ void MPCIController::custom_configuration()
 
   action_dim_ = static_cast<int>(dof_) * horizon_;
   constraints_dim_ = action_dim_;
-  nWSR_ = 5 * (action_dim_ + constraints_dim_);  // TODO(@qleonardolp): validate s.o.t.a. Ref
+  nWSR_ = 5 * (action_dim_ + constraints_dim_);  // TODO(@qleonardolp): validate reference
 
   // Instantiate and configure SQProblem class ptr:
   sqproblem_ = std::make_shared<qpOASES::SQProblem>(action_dim_, constraints_dim_);

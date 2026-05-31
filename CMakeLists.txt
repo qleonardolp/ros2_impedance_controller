@@ -144,8 +144,22 @@ install(
 )
 
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  ament_lint_auto_find_test_dependencies()
+  find_package(ament_cmake_gmock REQUIRED)
+  find_package(controller_manager REQUIRED)
+
+  install(
+    FILES
+      "test/urdf/test_load.urdf.xacro"
+    DESTINATION share/${PROJECT_NAME}/test
+  )
+
+  # test loading controller
+  add_definitions(-DTEST_FILES_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/test")
+  ament_add_gmock(test_load_impedance_controller test/test_load_impedance_controller.cpp)
+  target_link_libraries(test_load_impedance_controller
+    controller_manager::controller_manager
+    hardware_interface::hardware_interface
+  )
 endif()
 
 ament_export_targets(export_ros2_impedance_controller HAS_LIBRARY_TARGET)

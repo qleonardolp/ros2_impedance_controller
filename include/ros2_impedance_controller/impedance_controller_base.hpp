@@ -193,9 +193,6 @@ protected:
 
   // Impedance reference subscriber
   rclcpp::Subscription<ReferenceType>::SharedPtr reference_subscriber_;
-
-  // TODO(@qleonardolp): update realtime containers
-  // https://github.com/ros-controls/ros2_controllers/pull/1935
   realtime_tools::RealtimeThreadSafeBox<ReferenceType> rt_reference_;
   // Impedance reference
   ReferenceType reference_;
