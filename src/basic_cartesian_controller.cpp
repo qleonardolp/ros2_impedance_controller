@@ -77,7 +77,6 @@ void BasicCartesianController::custom_configuration()
   jacobian_pinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
   jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
   jsim_jpinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
-  jacobian_dt_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
 }
 
 void BasicCartesianController::custom_activation()
@@ -106,12 +105,6 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
     estimated_wrench_.noalias() = jacobianT_pinv_ * (robot_efforts_ - effort_commands_);
   }
 
-  pinocchio::getFrameJacobianTimeVariation(
-    robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
-    jacobian_dt_);
-
-  // Compute `interaction_link` task space acceleration
-  actual_accel_.noalias() = jacobian_ * robot_ddq_ + jacobian_dt_ * robot_dq_;
   accel_deviation_.noalias() = actual_accel_ - desired_pose_accel_;
 
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;

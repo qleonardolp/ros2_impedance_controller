@@ -100,9 +100,6 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_configure(
   // Initialize dynamic Eigen members
   robot_q_.resize(degrees_of_freedom_);
   robot_dq_.resize(degrees_of_freedom_);
-  robot_dq_last_.resize(degrees_of_freedom_);
-  robot_ddq_.resize(degrees_of_freedom_);
-  robot_ddq_filt_.resize(degrees_of_freedom_);
   robot_efforts_.resize(degrees_of_freedom_);
   effort_commands_.resize(degrees_of_freedom_);
   jacobian_ = Matrix6Xd::Zero(kCartesianDim, degrees_of_freedom_);
@@ -149,8 +146,6 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   // Dynamic size members (joint space dim)
   jacobian_.setZero();
   effort_commands_.setZero();
-  robot_ddq_filt_.setZero();
-  robot_dq_last_.setZero();
 
   // ros2_control interfaces
   effort_command_interfaces_.resize(degrees_of_freedom_, nullptr);
@@ -168,6 +163,7 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   desired_twist_.setZero();
   actual_pose_.setZero();
   actual_twist_.setZero();
+  actual_twist_last_.setZero();
   actual_accel_.setZero();
 
   for (const auto & interface : state_interfaces_)  // LoanedStateInterface from the base class
@@ -297,13 +293,7 @@ bool ImpedanceControllerBase::update_robot()
     {
       robot_efforts_(k) = effort.value();
     }
-
-    // Finite difference
-    robot_ddq_(k) = (robot_dq_(k) - robot_dq_last_(k)) / delta_t_;
-    robot_dq_last_(k) = robot_dq_(k);
   }
-
-  robot_ddq_filt_ = acc_lpf_alpha_ * robot_ddq_ + (1.0 - acc_lpf_alpha_) * robot_ddq_filt_;
 
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_q_, robot_dq_);
   // fill M(q)
@@ -320,6 +310,11 @@ void ImpedanceControllerBase::update_deviation_and_reference()
     jacobian_);
 
   actual_twist_.noalias() = jacobian_ * robot_dq_;
+
+  // Compute `interaction_link` task space acceleration
+  actual_accel_ = acc_lpf_alpha_ / delta_t_ * (actual_twist_ - actual_twist_last_) +
+                  (1.0 - acc_lpf_alpha_) * actual_accel_;
+  actual_twist_last_.noalias() = actual_twist_;
 
   auto ref_optional = rt_reference_.try_get();
 

@@ -160,8 +160,6 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
     robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
     jacobian_dt_);
 
-  // Compute `interaction_link` task space acceleration
-  actual_accel_.noalias() = jacobian_ * robot_ddq_ + jacobian_dt_ * robot_dq_;
   accel_deviation_.noalias() = actual_accel_ - desired_pose_accel_;
 
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
