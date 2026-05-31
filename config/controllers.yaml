@@ -13,27 +13,11 @@ ur5_controller:
     ft_sensor_topic: end_effector_ft_sensor
     stiffness: [490.0, 810.0, 810.0, 120.0, 225.0, 180.0]
     taskspace_mass: 10.0
-    # stiffness: [400.0, 400.0, 400.0, 70.0, 70.0, 40.0]  # TODO: tuning
+    # stiffness: [400.0, 400.0, 400.0, 70.0, 70.0, 40.0]
     # damping: [134.16, 134.16, 134.16, 15.086, 15.086, 15.086]
     # taskspace_mass: 0.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
-    visualize_reference: true
-
-spot_leg_controller:
-  ros__parameters:
-    type: ros2_impedance_controller/CartesianController
-    joints:
-      - fl_hipx
-      - fl_hipy
-      - fl_knee
-    base_link: leg_support
-    interaction_link: fl_foot
-    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
-    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
-    taskspace_mass: 0.0
-    urdf_package: ros2_descriptions
-    urdf_relative_path: /description/urdf/spot_leg.description.urdf.xacro
     visualize_reference: true
 
 hyl_controller:
@@ -48,9 +32,10 @@ hyl_controller:
     damping: [180.0, 180.0, 160.0, 0.0, 0.0, 0.0]
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
+    gravity_compensation: false
     visualize_reference: true
 
-mpc_controller:
+hyl_mpc_controller:
   ros__parameters:
     type: ros2_impedance_controller/MPCIController
     is_async: true
@@ -66,115 +51,6 @@ mpc_controller:
     urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
     visualize_reference: true
     torque_max: 140.0  # from HyL URDF
-    slew_limit: 0.9
-    timestep: 0.004
-    horizon: 7
-
-ur5_mpc:
-  ros__parameters:
-    type: ros2_impedance_controller/MPCIController
-    is_async: true
-    update_rate: 250
-    joints:
-      - shoulder_pan_joint
-      - shoulder_lift_joint
-      - elbow_joint
-      - wrist_1_joint
-      - wrist_2_joint
-      - wrist_3_joint
-    base_link: base_link
-    interaction_link: ee_link
-    ft_sensor_topic: end_effector_ft_sensor
-    stiffness: [490.0, 810.0, 810.0, 120.0, 225.0, 180.0]
-    damping: [140.0, 180.0, 180.0, 18.6226, 25.5, 22.8079]
-    urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
-    urdf_package: ros2_descriptions
-    visualize_reference: true
-    torque_max: 150.0  # this one has different limits for half of the joints
-    slew_limit: 0.9
-    timestep: 0.004
-    horizon: 5
-
-spot_fl_control:
-  ros__parameters:
-    type: ros2_impedance_controller/MPCIController
-    is_async: true
-    update_rate: 250
-    joints:
-      - fl_hipx
-      - fl_hipy
-      - fl_knee
-    base_link: body
-    interaction_link: fl_foot
-    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
-    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
-    urdf_package: ros2_descriptions
-    urdf_relative_path: /description/urdf/spot_fl.description.urdf.xacro
-    visualize_reference: true
-    torque_max: 140.0
-    slew_limit: 0.9
-    timestep: 0.004
-    horizon: 7
-
-spot_fr_control:
-  ros__parameters:
-    type: ros2_impedance_controller/MPCIController
-    is_async: true
-    update_rate: 250
-    joints:
-      - fr_hipx
-      - fr_hipy
-      - fr_knee
-    base_link: body
-    interaction_link: fr_foot
-    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
-    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
-    urdf_package: ros2_descriptions
-    urdf_relative_path: /description/urdf/spot_fr.description.urdf.xacro
-    visualize_reference: true
-    torque_max: 140.0
-    slew_limit: 0.9
-    timestep: 0.004
-    horizon: 7
-
-spot_hl_control:
-  ros__parameters:
-    type: ros2_impedance_controller/MPCIController
-    is_async: true
-    update_rate: 250
-    joints:
-      - hl_hipx
-      - hl_hipy
-      - hl_knee
-    base_link: body
-    interaction_link: hl_foot
-    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
-    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
-    urdf_package: ros2_descriptions
-    urdf_relative_path: /description/urdf/spot_hl.description.urdf.xacro
-    visualize_reference: true
-    torque_max: 140.0
-    slew_limit: 0.9
-    timestep: 0.004
-    horizon: 7
-
-spot_hr_control:
-  ros__parameters:
-    type: ros2_impedance_controller/MPCIController
-    is_async: true
-    update_rate: 250
-    joints:
-      - hr_hipx
-      - hr_hipy
-      - hr_knee
-    base_link: body
-    interaction_link: hr_foot
-    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
-    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
-    urdf_package: ros2_descriptions
-    urdf_relative_path: /description/urdf/spot_hr.description.urdf.xacro
-    visualize_reference: true
-    torque_max: 140.0
     slew_limit: 0.9
     timestep: 0.004
     horizon: 7

@@ -22,7 +22,7 @@
           base_class_type="controller_interface::ControllerInterface">
     <description>
       Model Predictive Cartesian Impedance Control (MPCIC),
-      with cost function formulation centered on the impedance dynamics.
+      with taskspace dynamics cost function.
     </description>
     </class>
   </library>
