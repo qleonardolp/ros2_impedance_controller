@@ -1,51 +1,64 @@
 # ros2_impedance_controller
+
 [![IEEE Xplore](https://img.shields.io/badge/ICAR%202025-11338640-blue?logo=IEEE)](https://ieeexplore.ieee.org/document/11338640) [![Static Badge](https://img.shields.io/badge/v1.2.0-%20?style=flat&logo=github&labelColor=gray&color=blue)](https://github.com/qleonardolp/ros2_impedance_controller/tree/v1.2.0)
 
+Robot Cartesian impedance controller based on the `ros2_control` framework and Pinocchio. Default branch distro: `Jazzy`
 
-Robot impedance controller designed with the `ros2_control` framework and Pinocchio. Default branch ROS2 distro: Jazzy
+The `ros2_impedance_controller` is meant to be a robot-agnostic, fully ROS2 ecosystem impedance controller, with diagnostics for researchers.
+<!-- There are many Cartesian (task space) impedance controllers, mainly for ROS 1, but ... -->
+
+## Installation
 
 1. Clone this repo;
 
-2. Install build dependencies with:
+2. Install build dependencies with: `rosdep install --from-paths src -y --ignore-src`
 
-```console
-rosdep install --from-paths src -y --ignore-src
-```
+## Features
 
-3. For simulations with Gazebo Harmonic, consider use my robot descriptions in [ros2_descriptions](https://github.com/qleonardolp/ros2_descriptions);
+By making a slight modification to your URDF, you can use the impedance controller with any rigid-body leg or manipulator. Check the URDF section in the [documentation](doc/ros2_impedance_controller_documentation.pdf) to understand _how_ and _why_ adequate your robot description to use with the available controllers. For a quick first try with Gazebo Harmonic, consider using my robot descriptions in [ros2_descriptions](https://github.com/qleonardolp/ros2_descriptions), and my simulation settings in [robot_impedance_lab](https://github.com/qleonardolp/robot_impedance_lab).
 
-4. For a handful control reference signal generator use my package [robot_impedance_analyzer](https://github.com/qleonardolp/robot_impedance_analyzer/tree/v1.2.0).
+According to the classical impedance definitions, the controller input is the end-effector pose and its derivatives. For easy standardization, this input type is the [`kinematic_pose_msgs`](https://github.com/qleonardolp/kinematic_pose_msgs). The package [robot_impedance_analyzer](https://github.com/qleonardolp/robot_impedance_analyzer/) can be used for control analysis with single-axis parametric inputs such as step, sine and square waves, PRBS and others.
 
-## Instructions
+Check [controllers.yaml](config/controllers.yaml) to see how you can configure the available controllers.
 
-### Simulation with Robotic Arm
+Available impedance controllers:
 
-Use launcher default arguments:
+| **Controller** | **Description** |
+| ---------- | ----------- |
+| CartesianController | Hogan's classical impedance control law with inertia shaping (optional) |
+| BasicCartesianController | PD impedance + gravity compensation (optional) |
+| MPCIController | Model Predictive Cartesian Impedance Control with taskspace dynamics cost function |
 
-```bash
-ros2 launch ros2_impedance_controller simulation.launch.py
-```
+## Installing qpOASES (optional)
 
-```bash
-ros2 control set_controller_state ur5_controller active
-```
+The _Model Predictive Cartesian Impedance Controller_ (MPCIC) uses `qpOASES` to solve the QP problem.
 
-### Simulation with Spot leg
+> [!WARNING]
+> MPCIC is in development phase.
 
-```bash
-ros2 launch ros2_impedance_controller simulation.launch.py robot:=spot_leg controller:=spot_leg_controller
-```
+Clone and checkout the tag:
 
-```bash
-ros2 control set_controller_state spot_leg_controller active
-```
+  ```bash
+  git clone https://github.com/coin-or/qpOASES.git
+  cd qpOASES && git checkout releases/3.2.2
+  ```
 
-### Simulation with Hydraulic Leg (HyL)
+Build and install:
 
-```bash
-ros2 launch ros2_impedance_controller simulation.launch.py robot:=hyl controller:=hyl_controller
-```
+  ```bash
+  mkdir build && cd build
+  cmake .. -D CMAKE_CXX_FLAGS="-fPIC"
+  make
+  sudo make install
+  ```
 
 ## About
 
-The controller implement the classical impedance control law, following the notation from the book _Cartesian Impedance Control of Redundant and Flexible-Joint Robots_, Ott, C., 2008. Please check the [documentation](doc/ros2_impedance_controller_documentation.pdf) for further details.
+The controllers implement Hogan's classical impedance control law, following the notation from the book _Cartesian Impedance Control of Redundant and Flexible-Joint Robots_, Ott, C., 2008. Please check the [documentation](doc/ros2_impedance_controller_documentation.pdf) for further details.
+
+<!--
+Unittest:
+1. colcon build --mixin coverage-gcc --packages-select ros2_impedance_controller --cmake-args -DCMAKE_BUILD_TYPE=Debug
+2. colcon test --packages-select ros2_impedance_controller --event-handlers console_direct+
+3. gcovr -r src/ros2_impedance_controller/ build/ros2_impedance_controller/ --html -o coverage/index.html
+-->

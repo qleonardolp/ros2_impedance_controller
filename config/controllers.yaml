@@ -1,6 +1,6 @@
 ur5_controller:
   ros__parameters:
-    type: ros2_impedance_controller/ImpedanceController
+    type: ros2_impedance_controller/CartesianController
     joints:
       - shoulder_pan_joint
       - shoulder_lift_joint
@@ -11,34 +11,35 @@ ur5_controller:
     base_link: base_link
     interaction_link: ee_link
     ft_sensor_topic: end_effector_ft_sensor
-    stiffness: [200.0, 800.0, 800.0, 120.0, 120.0, 120.0]
-    taskspace_mass: 20.0
-    # stiffness: [400.0, 400.0, 400.0, 70.0, 70.0, 40.0]  # TODO: tuning
+    stiffness: [490.0, 810.0, 810.0, 120.0, 225.0, 180.0]
+    taskspace_mass: 10.0
+    # stiffness: [400.0, 400.0, 400.0, 70.0, 70.0, 40.0]
     # damping: [134.16, 134.16, 134.16, 15.086, 15.086, 15.086]
     # taskspace_mass: 0.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/ur5.description.urdf.xacro
     visualize_reference: true
 
-spot_leg_controller:
-  ros__parameters:
-    type: ros2_impedance_controller/ImpedanceController
-    joints:
-      - fl_hipx
-      - fl_hipy
-      - fl_knee
-    base_link: leg_support
-    interaction_link: fl_foot
-    stiffness: [400.0, 400.0, 800.0, 0.0, 0.0, 0.0]
-    damping: [43.0, 43.0, 90.0, 0.0, 0.0, 0.0]
-    taskspace_mass: 0.0
-    urdf_package: ros2_descriptions
-    urdf_relative_path: /description/urdf/spot_leg.description.urdf.xacro
-    visualize_reference: true
-
 hyl_controller:
   ros__parameters:
-    type: ros2_impedance_controller/ImpedanceController
+    type: ros2_impedance_controller/BasicCartesianController
+    joints:
+      - hfe_joint
+      - kfe_joint
+    base_link: trunk
+    interaction_link: foot
+    stiffness: [810.0, 810.0, 640.0, 0.0, 0.0, 0.0]
+    damping: [180.0, 180.0, 160.0, 0.0, 0.0, 0.0]
+    urdf_package: ros2_descriptions
+    urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
+    gravity_compensation: false
+    visualize_reference: true
+
+hyl_mpc_controller:
+  ros__parameters:
+    type: ros2_impedance_controller/MPCIController
+    is_async: true
+    update_rate: 250
     joints:
       - hfe_joint
       - kfe_joint
@@ -46,24 +47,10 @@ hyl_controller:
     interaction_link: foot
     stiffness: [400.0, 0.0, 800.0, 0.0, 0.0, 0.0]
     damping: [43.0, 0.0, 90.0, 0.0, 0.0, 0.0]
-    taskspace_mass: 0.0
     urdf_package: ros2_descriptions
     urdf_relative_path: /description/urdf/hyl.description.urdf.xacro
     visualize_reference: true
-
-spot_controller:
-  ros__parameters:
-    type: ros2_impedance_controller/ImpedanceController
-    joints:
-      - fl_hipx
-      - fl_hipy
-      - fl_knee
-    base_link: body
-    interaction_link: fl_foot
-    # TBD: Whole-Body Controller
-    stiffness: [700.0, 700.0, 1000.0, 0.0, 0.0, 0.0]
-    damping: [52.0, 52.0, 63.0, 0.0, 0.0, 0.0]
-    taskspace_mass: 0.0
-    urdf_package: ros2_descriptions
-    urdf_relative_path: /description/urdf/spot.description.urdf.xacro
-    visualize_reference: true
+    torque_max: 140.0  # from HyL URDF
+    slew_limit: 0.9
+    timestep: 0.004
+    horizon: 7

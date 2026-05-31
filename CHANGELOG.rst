@@ -2,6 +2,19 @@
 Changelog for package ros2_impedance_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.0.0 (2026-05-31)
+------------------
+* Refact controller with a base class;
+* Add controllers variants as derived classes;
+* Refact blank reference logic for safe activation;
+* Add unit tests with controller loading testing;
+* Improve README with instructions, motivation and features;
+* Add taskspace acceleration computation (``actual_accel_``);
+* Add MPC-based impedance controller with taskspace dynamics cost function;
+* Set MPC controller cmake target separetly to allow installation without qpOASES;
+* Add ``BasicCartesianController`` with only gravity compensation and PD impedance;
+* Migrate simulation files to `robot_impedance_lab <https://github.com/qleonardolp/robot_impedance_lab>`_.
+
 1.2.0 (2025-10-01)
 ------------------
 * Fix ``twist_compensation_`` term

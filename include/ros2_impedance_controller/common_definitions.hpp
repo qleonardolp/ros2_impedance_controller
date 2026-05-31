@@ -1,4 +1,4 @@
-// Copyright (c) 2025, qleonardolp
+// Copyright (c) 2026, qleonardolp
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,4 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "ros2_impedance_controller/ros2_impedance_controller.hpp"
+#ifndef ROS2_IMPEDANCE_CONTROLLER__COMMON_DEFINITIONS_HPP_
+#define ROS2_IMPEDANCE_CONTROLLER__COMMON_DEFINITIONS_HPP_
+
+#include "Eigen/Dense"
+
+namespace ros2_impedance_controller
+{
+const uint8_t kCartesianDim = 6;
+
+using DiagonalMatrix6d = Eigen::DiagonalMatrix<double, kCartesianDim>;
+using Vector6d = Eigen::Matrix<double, kCartesianDim, 1>;
+using Matrix6d = Eigen::Matrix<double, kCartesianDim, kCartesianDim>;
+}  // namespace ros2_impedance_controller
+
+#endif  // ROS2_IMPEDANCE_CONTROLLER__COMMON_DEFINITIONS_HPP_
