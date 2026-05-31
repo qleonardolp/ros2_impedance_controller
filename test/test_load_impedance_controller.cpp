@@ -32,13 +32,25 @@ TEST(TestLoadImpedanceController, load_controller)
     executor, ros2_impedance_controller::valid_6dof_urdf, true, "test_controller_manager");
   const std::string test_file_path = std::string(TEST_FILES_DIRECTORY) + "/test_params.yaml";
 
-  cm.set_parameter({"test_load_controller.params_file", test_file_path});
+  cm.set_parameter({"test_cartesian_controller.params_file", test_file_path});
+  cm.set_parameter({"test_basic_controller.params_file", test_file_path});
+  cm.set_parameter({"test_mpc_controller.params_file", test_file_path});
+
   cm.set_parameter(
-    {"test_load_controller.type", "ros2_impedance_controller/BasicCartesianController"});
+    {"test_cartesian_controller.type", "ros2_impedance_controller/CartesianController"});
+  cm.set_parameter(
+    {"test_basic_controller.type", "ros2_impedance_controller/BasicCartesianController"});
+  cm.set_parameter({"test_mpc_controller.type", "ros2_impedance_controller/MPCIController"});
 
-  ASSERT_NE(cm.load_controller("test_load_controller"), nullptr);
+  ASSERT_NE(cm.load_controller("test_cartesian_controller"), nullptr);
+  ASSERT_NE(cm.load_controller("test_basic_controller"), nullptr);
+  ASSERT_NE(cm.load_controller("test_mpc_controller"), nullptr);
 
-  ASSERT_EQ(cm.configure_controller("test_load_controller"), controller_interface::return_type::OK);
+  ASSERT_EQ(
+    cm.configure_controller("test_cartesian_controller"), controller_interface::return_type::OK);
+  ASSERT_EQ(
+    cm.configure_controller("test_basic_controller"), controller_interface::return_type::OK);
+  ASSERT_EQ(cm.configure_controller("test_mpc_controller"), controller_interface::return_type::OK);
 }
 
 int main(int argc, char ** argv)

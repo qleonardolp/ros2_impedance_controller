@@ -1,4 +1,5 @@
-test_load_controller:
+# BasicCartesianController
+test_basic_controller:
   ros__parameters:
     joints:
       - g_joint
@@ -14,3 +15,42 @@ test_load_controller:
     urdf_package: ros2_impedance_controller
     urdf_relative_path: /test/test_load.urdf.xacro
     has_effort_states: false
+
+# CartesianController
+test_cartesian_controller:
+  ros__parameters:
+    joints:
+      - g_joint
+      - f_joint
+      - e_joint
+      - d_joint
+      - c_joint
+      - b_joint
+    base_link: base_link
+    interaction_link: jaws_base_link
+    stiffness: [100.0, 100.0, 100.0, 0.0, 0.0, 0.0]
+    damping: [20.0, 20.0, 20.0, 0.0, 0.0, 0.0]
+    urdf_package: ros2_impedance_controller
+    urdf_relative_path: /test/test_load.urdf.xacro
+    has_effort_states: false
+
+# MPCIController
+test_mpc_controller:
+  ros__parameters:
+    joints:
+      - g_joint
+      - f_joint
+      - e_joint
+      - d_joint
+      - c_joint
+      - b_joint
+    base_link: base_link
+    interaction_link: jaws_base_link
+    stiffness: [100.0, 100.0, 100.0, 0.0, 0.0, 0.0]
+    damping: [20.0, 20.0, 20.0, 0.0, 0.0, 0.0]
+    urdf_package: ros2_impedance_controller
+    urdf_relative_path: /test/test_load.urdf.xacro
+    torque_max: 90.0
+    slew_limit: 0.90
+    timestep: 0.01
+    horizon: 3
