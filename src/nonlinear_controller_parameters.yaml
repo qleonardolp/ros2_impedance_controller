@@ -1,0 +1,60 @@
+nonlinear_controller:
+  joints: {
+    type: string_array,
+    default_value: [],
+    description: "Name of the joints to control.",
+  }
+  base_link: {
+    type: string,
+    default_value: "",
+    description: "Name of the link used for kinematic reference.",
+  }
+  interaction_link: {
+    type: string,
+    default_value: "",
+    description: "Name of the link used for interaction port, usually is the robot end effector.",
+  }
+  gravity_compensation: {
+    type: bool,
+    default_value: true,
+    description: "Enable gravity compensation feedforward term.",
+    read_only: true,
+  }
+  urdf_package: {
+    type: string,
+    default_value: "",
+    description: "Robot description package, used to find the package share directory.",
+  }
+  urdf_relative_path: {
+    type: string,
+    default_value: "",
+    description: "URDF relative path (to 'urdf_package'), with the file name.",
+  }
+  stiffness: {
+    type: double_array,
+    default_value: [],
+    description: "Cartesian nominal stiffness [N/m, N/m, N/m, Nm/rad, Nm/rad, Nm/rad]",
+  }
+  damping: {
+    type: double_array,
+    default_value: [],
+    description: "Cartesian nominal damping [N.s/m, N.s/m, N.s/m, Nm.s/rad, Nm.s/rad, Nm.s/rad]",
+  }
+  spring_force_limit: {
+    type: double,
+    default_value: 100.0,
+    description: "Spring force maximum value. This limit is used to parameterize the spring saturation.",
+    validation: {
+      gt<>: [0.0]
+    }
+  }
+  visualize_reference: {
+    type: bool,
+    default_value: false,
+    read_only: true,
+  }
+  has_effort_states: {
+    type: bool,
+    default_value: true,
+    read_only: true,
+  }

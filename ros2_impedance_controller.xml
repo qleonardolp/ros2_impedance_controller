@@ -14,6 +14,13 @@
       Basic Cartesian controller with only gravity compensation and PD impedance.
     </description>
     </class>
+    <class name="ros2_impedance_controller/NonlinearCartesianController"
+          type="ros2_impedance_controller::NonlinearCartesianController"
+          base_class_type="controller_interface::ControllerInterface">
+    <description>
+      Nonlinear Cartesian controller with stiffness saturation and impact softening.
+    </description>
+    </class>
   </library>
 
   <library path="mpcic_controller">

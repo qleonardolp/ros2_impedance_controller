@@ -41,9 +41,15 @@ generate_parameter_library(
   src/cartesian_controller_parameters.yaml
 )
 
+generate_parameter_library(
+  nonlinear_controller_parameters
+  src/nonlinear_controller_parameters.yaml
+)
+
 add_library(${PROJECT_NAME} SHARED
   src/impedance_controller_base.cpp
   src/basic_cartesian_controller.cpp
+  src/nonlinear_cartesian_controller.cpp
   src/cartesian_controller.cpp
 )
 
@@ -56,6 +62,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
   cartesian_controller_parameters
+  nonlinear_controller_parameters
   Eigen3::Eigen
   pinocchio::pinocchio
   ament_index_cpp::ament_index_cpp
@@ -114,6 +121,7 @@ if(qpOASES_FOUND)
     TARGETS
       ros2_impedance_controller
       cartesian_controller_parameters
+      nonlinear_controller_parameters
       mpcic_controller
       mpcic_parameters
     EXPORT export_ros2_impedance_controller
@@ -128,6 +136,7 @@ else()
     TARGETS
       ros2_impedance_controller
       cartesian_controller_parameters
+      nonlinear_controller_parameters
     EXPORT export_ros2_impedance_controller
     RUNTIME DESTINATION bin
     ARCHIVE DESTINATION lib
