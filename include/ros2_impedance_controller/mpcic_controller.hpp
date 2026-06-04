@@ -78,6 +78,13 @@ protected:
 
   void update_references();
 
+  /**
+   * @brief Check non-empty reference message
+   *
+   * @return true if valid, and false if empty.
+   */
+  bool validate_reference();
+
   void update_Ln(Eigen::MatrixXd Cn);
 
   void update_QP();

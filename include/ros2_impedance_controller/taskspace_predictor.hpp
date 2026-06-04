@@ -19,7 +19,8 @@
 #include <string>
 #include <vector>
 
-#include "pinocchio/algorithm/aba.hpp"     // compute joint accelerations
+#include "pinocchio/algorithm/aba.hpp"  // compute joint accelerations
+#include "pinocchio/algorithm/cholesky.hpp"
 #include "pinocchio/algorithm/crba.hpp"    // compute joint space inertia
 #include "pinocchio/algorithm/frames.hpp"  // computeFrameJacobian
 #include "pinocchio/algorithm/rnea.hpp"    // compute non linear terms (C, g)
@@ -173,6 +174,7 @@ private:
   Eigen::Matrix3d jlog3_;
   // Composed Jacobian with Lie Algebra to properly map the SO(3) time integral
   Eigen::MatrixXd jacobian_;
+  Eigen::MatrixXd jacobian_last_;
   Eigen::MatrixXd jacobian_inv_;   // Composed Jacobian inverse
   Eigen::MatrixXd jacobianT_inv_;  // Composed Jacobian transpose inverse
   Eigen::MatrixXd jacobian_dt_;    // Composed Jacobian derivative

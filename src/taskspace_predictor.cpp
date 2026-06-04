@@ -30,6 +30,7 @@ TaskspacePredictor::TaskspacePredictor(
   dof_ = robot_.nq;
 
   jacobian_ = Eigen::MatrixXd::Zero(kCartesianDim, dof_);
+  jacobian_last_ = jacobian_;
   jacobianT_inv_ = Eigen::MatrixXd::Zero(kCartesianDim, dof_);
   jacobianN_ = Eigen::MatrixXd::Zero(kCartesianDim * horizon, dof_ * horizon);
   geometric_jacobian_ = Eigen::MatrixXd::Zero(kCartesianDim, dof_);
@@ -73,15 +74,15 @@ void TaskspacePredictor::predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::Ve
   robot_dq_ = v + timestep_ * robot_ddq_;
   robot_q_ = pinocchio::integrate(robot_, q, timestep_ * robot_dq_);
   robot_g_.segment(0, dof_) = pinocchio::computeGeneralizedGravity(robot_, *data_.get(), robot_q_);
-  update_inertia();
 
+  update_inertia();
   update_jacobian();
-  assemble_Jn(0);
+  update_coriolis();
 
   update_Bk(0);
   update_Ak(0);
 
-  update_coriolis();
+  assemble_Jn(0);
   assemble_Cn(0);
 
   for (size_t k = 1; k < horizon_; ++k)
@@ -92,15 +93,15 @@ void TaskspacePredictor::predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::Ve
     robot_q_ = pinocchio::integrate(robot_, robot_q_, timestep_ * robot_dq_);
     robot_g_.segment(k * dof_, dof_) =
       pinocchio::computeGeneralizedGravity(robot_, *data_.get(), robot_q_);
-    update_inertia();
 
+    update_inertia();
     update_jacobian();
-    assemble_Jn(k);
+    update_coriolis();
 
     update_Bk(k);
     update_Ak(k);
 
-    update_coriolis();
+    assemble_Jn(k);
     assemble_Cn(k);
   }
 
@@ -111,16 +112,59 @@ void TaskspacePredictor::predict(Eigen::VectorXd q, Eigen::VectorXd v, Eigen::Ve
   assemble_G();
 }
 
-void TaskspacePredictor::assemble_Jn(std::size_t n)
+void TaskspacePredictor::update_inertia()
 {
-  jacobianT_inv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
-  jacobianN_.block(kCartesianDim * n, dof_ * n, kCartesianDim, dof_) = jacobianT_inv_;
+  pinocchio::crba(robot_, *data_.get(), robot_q_);  // compute M
+  data_->M.triangularView<Eigen::StrictlyLower>() =
+    data_->M.transpose().triangularView<Eigen::StrictlyLower>();
+  pinocchio::cholesky::decompose(robot_, *data_.get());
+  pinocchio::cholesky::computeMinv(robot_, *data_.get());  // fills data_->Minv
 }
 
-void TaskspacePredictor::assemble_Cn(std::size_t n)
+void TaskspacePredictor::update_jacobian()
 {
-  coriolisN_.block(kCartesianDim * n, kCartesianDim * n, kCartesianDim, kCartesianDim) =
-    task_coriolis_;
+  pinocchio::computeFrameJacobian(
+    robot_, *data_.get(), robot_q_, ee_frame_, pinocchio::LOCAL_WORLD_ALIGNED, geometric_jacobian_);
+
+  // Compute Jlog3 for the ee_frame_
+  pinocchio::forwardKinematics(robot_, *data_.get(), robot_q_, robot_dq_);
+  pinocchio::updateFramePlacement(robot_, *data_.get(), ee_frame_);
+  pinocchio::Jlog3(data_.get()->oMf[ee_frame_].rotation(), jlog3_);
+
+  jlog3_transform_.block(3, 3, 3, 3) = jlog3_.inverse();
+  jacobian_ = jlog3_transform_ * geometric_jacobian_;
+
+  jacobian_dt_ = (jacobian_ - jacobian_last_) / timestep_;
+  jacobian_last_ = jacobian_;
+
+  jacobian_inv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
+  jacobianT_inv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
+}
+
+void TaskspacePredictor::update_coriolis()
+{
+  pinocchio::computeCoriolisMatrix(robot_, *data_.get(), robot_q_, robot_dq_);
+  task_coriolis_ =
+    jacobianT_inv_ * (data_->C - data_->M * jacobian_inv_ * jacobian_dt_) * jacobian_inv_;
+}
+
+void TaskspacePredictor::update_Bk(std::size_t n)
+{
+  Bk_.block(kCartesianDim, 0, kCartesianDim, dof_) = timestep_ * jacobian_ * data_->Minv;
+  BN_[n] = Bk_;
+}
+
+void TaskspacePredictor::update_Ak(std::size_t n)
+{
+  Ak_.block(0, kCartesianDim, kCartesianDim, kCartesianDim) =
+    timestep_ * Eigen::MatrixXd::Identity(kCartesianDim, kCartesianDim);
+
+  Ak_.block(kCartesianDim, kCartesianDim, kCartesianDim, kCartesianDim) =
+    Eigen::MatrixXd::Identity(kCartesianDim, kCartesianDim) -
+    (Bk_.block(kCartesianDim, 0, kCartesianDim, dof_) * data_->C - timestep_ * jacobian_dt_) *
+      jacobian_inv_;
+  // Above we are reusing Bk_ = J*M^(-1) term in Ak_, for computational optimization.
+  AN_[n] = Ak_;
 }
 
 void TaskspacePredictor::assemble_F()
@@ -152,62 +196,15 @@ void TaskspacePredictor::assemble_G()
   }
 }
 
-void TaskspacePredictor::update_jacobian()
+void TaskspacePredictor::assemble_Jn(std::size_t n)
 {
-  pinocchio::computeFrameJacobian(
-    robot_, *data_.get(), robot_q_, ee_frame_, pinocchio::LOCAL_WORLD_ALIGNED, geometric_jacobian_);
-
-  // Compute Jlog3 for the ee_frame_
-  pinocchio::forwardKinematics(robot_, *data_.get(), robot_q_, robot_dq_);
-  pinocchio::updateFramePlacement(robot_, *data_.get(), ee_frame_);
-  pinocchio::Jlog3(data_.get()->oMf[ee_frame_].rotation(), jlog3_);
-
-  jlog3_transform_.block(3, 3, 3, 3) = jlog3_.inverse();
-  jacobian_ = jlog3_transform_ * geometric_jacobian_;
-
-  // TODO(@qleonardolp): refact dJ/dt with the Lie map
-  pinocchio::getFrameJacobianTimeVariation(
-    robot_, *data_.get(), ee_frame_, pinocchio::LOCAL_WORLD_ALIGNED, jacobian_dt_);
-
-  jacobian_inv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
+  jacobianN_.block(kCartesianDim * n, dof_ * n, kCartesianDim, dof_) = jacobianT_inv_;
 }
 
-void TaskspacePredictor::update_coriolis()
+void TaskspacePredictor::assemble_Cn(std::size_t n)
 {
-  pinocchio::computeCoriolisMatrix(robot_, *data_.get(), robot_q_, robot_dq_);
-  task_coriolis_ =
-    jacobianT_inv_ * (data_->C - data_->M * jacobian_inv_ * jacobian_dt_) * jacobian_inv_;
-}
-
-void TaskspacePredictor::update_inertia()
-{
-  pinocchio::crba(robot_, *data_.get(), robot_q_);  // compute M
-  data_->M.triangularView<Eigen::StrictlyLower>() =
-    data_->M.transpose().triangularView<Eigen::StrictlyLower>();
-  // Minv is already computed by pinocchio::aba
-  data_->Minv.triangularView<Eigen::StrictlyLower>() =
-    data_->Minv.transpose().triangularView<Eigen::StrictlyLower>();
-}
-
-void TaskspacePredictor::update_Ak(std::size_t n)
-{
-  Ak_.block(0, kCartesianDim, kCartesianDim, kCartesianDim) =
-    timestep_ * Eigen::MatrixXd::Identity(kCartesianDim, kCartesianDim);
-
-  Ak_.block(kCartesianDim, kCartesianDim, kCartesianDim, kCartesianDim) =
-    Eigen::MatrixXd::Identity(kCartesianDim, kCartesianDim) -
-    (Bk_.block(kCartesianDim, 0, kCartesianDim, dof_) * data_->C - timestep_ * jacobian_dt_) *
-      jacobian_inv_;
-  // Above we are reusing Bk_ = (MJ^(-1))^-1 term in Ak_, for computational optimization.
-  AN_[n] = Ak_;
-}
-
-void TaskspacePredictor::update_Bk(std::size_t n)
-{
-  Bk_.block(kCartesianDim, 0, kCartesianDim, dof_) =
-    timestep_ * (data_->M * jacobian_inv_).colPivHouseholderQr().inverse();
-
-  BN_[n] = Bk_;
+  coriolisN_.block(kCartesianDim * n, kCartesianDim * n, kCartesianDim, kCartesianDim) =
+    task_coriolis_;
 }
 
 Eigen::MatrixXd TaskspacePredictor::get_Jn() { return jacobianN_; }

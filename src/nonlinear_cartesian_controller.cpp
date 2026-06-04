@@ -109,12 +109,8 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
 
-  // Update stiffness: K(dx) := k_0 / sqrt(1 + (k_0*dx/F_max)^2)
-  desired_stiffness_.diagonal() = nominal_stiffness_.diagonal().array().cwiseProduct(
-    (((nominal_stiffness_ * pose_deviation_).array() / spring_force_limit_).square() + 1.0)
-      .rsqrt());
-  // Update damping
-  desired_damping_ = nominal_damping_;
+  update_stiffness();
+  update_damping();
 
   impedance_wrench_.noalias() =
     (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
@@ -171,7 +167,7 @@ void NonlinearCartesianController::publish_status()
   status_msg_.data[20] = desired_stiffness_.diagonal()(2);
   status_msg_.data[21] = accel_deviation_(3);
   status_msg_.data[22] = accel_deviation_(4);
-  status_msg_.data[23] = accel_deviation_(5);
+  status_msg_.data[23] = divergence_;
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
 
@@ -189,6 +185,31 @@ void NonlinearCartesianController::compute_hamiltonian()
     cmd_lpf_alpha_ * hamiltonian_ + (1.0 - cmd_lpf_alpha_) * hamiltonian_filtered_;
   hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / delta_t_;
   hamiltonian_last_ = hamiltonian_filtered_;
+}
+
+void NonlinearCartesianController::update_stiffness()
+{
+  // Update stiffness: K(dx) := k_0 / sqrt(1 + (k_0*dx/F_max)^2)
+  desired_stiffness_.diagonal() = nominal_stiffness_.diagonal().array().cwiseProduct(
+    (((nominal_stiffness_ * pose_deviation_).array() / spring_force_limit_).square() + 1.0)
+      .rsqrt());
+}
+
+void NonlinearCartesianController::update_damping()
+{
+  desired_damping_ = nominal_damping_;
+
+  pinocchio::cholesky::decompose(robot_model_, *robot_data_.get());
+  pinocchio::cholesky::computeMinv(robot_model_, *robot_data_.get());
+
+  pinocchio::getFrameJacobianTimeVariation(
+    robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
+    jacobian_dt_);
+
+  jsim_jpinv_dj_ = jsim_jpinv_ * jacobian_dt_;
+
+  // Phase space (q,p) divergence:
+  divergence_ = -((jsim_jpinv_dj_ + desired_damping_ * jacobian_) * robot_data_->Minv).trace();
 }
 
 }  // namespace ros2_impedance_controller

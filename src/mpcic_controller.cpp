@@ -164,29 +164,33 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
   update_QP();
 
   // Solve SQProblem
-  if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED)
-  {  // Previous iteration failed. Reset tau_0 guess
-    effort_commands_ = jacobian_.transpose() * impedance_wrench_;
-    lbA_qp_.head(dof_) = effort_commands_ - du_max_;
-    ubA_qp_.head(dof_) = effort_commands_ + du_max_;
-  }
-
   sqp_ret_ = sqproblem_->hotstart(
     H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), lbA_qp_.data(),
     ubA_qp_.data(), nWSR_qp_, &cputime_qp_);
   sqproblem_->getPrimalSolution(u_qp_.data());
 
-  tau_desired_ = u_qp_.head(dof_);  // use the first action (tau_0)
-  effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
-
-  /*
-  if (debug_)
+  if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED)  // Iteration failed.
   {
-    RCLCPP_INFO_STREAM(
-      get_node()->get_logger(), "u_qp_: " << std::fixed << std::setprecision(2) << u_qp_);
-    debug_ = false;
+    impedance_wrench_.noalias() =
+      (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
+    tau_desired_ = jacobian_.transpose() * impedance_wrench_;
+    Eigen::SelfAdjointEigenSolver<ros2_impedance_controller::MatrixXr> eigensolver(H_qp_);
+    if (debug_)
+    {
+      double lambda_min = std::abs(eigensolver.eigenvalues().minCoeff());
+      double lambda_max = std::abs(eigensolver.eigenvalues().maxCoeff());
+      RCLCPP_INFO_STREAM(
+        get_node()->get_logger(),
+        "H_qp_: " << std::fixed << std::setprecision(2) << lambda_max / lambda_min);
+      debug_ = false;
+    }
   }
-  */
+  else
+  {
+    tau_desired_ = u_qp_.head(dof_);  // use the first action (tau_0)
+  }
+
+  effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
 
   compute_hamiltonian();
   return controller_interface::CallbackReturn::SUCCESS;
@@ -253,24 +257,39 @@ void MPCIController::update_references()
       task_desired_.segment((k - 1) * kStateSpaceDim, kStateSpaceDim);
   }
 
-  quat_desired_.x() = reference_.pose.orientation.x;
-  quat_desired_.y() = reference_.pose.orientation.y;
-  quat_desired_.z() = reference_.pose.orientation.z;
-  quat_desired_.w() = reference_.pose.orientation.w;
+  if (validate_reference())
+  {
+    quat_desired_.x() = reference_.pose.orientation.x;
+    quat_desired_.y() = reference_.pose.orientation.y;
+    quat_desired_.z() = reference_.pose.orientation.z;
+    quat_desired_.w() = reference_.pose.orientation.w;
 
-  task_desired_(0) = reference_.pose.position.x;
-  task_desired_(1) = reference_.pose.position.y;
-  task_desired_(2) = reference_.pose.position.z;
+    task_desired_(0) = reference_.pose.position.x;
+    task_desired_(1) = reference_.pose.position.y;
+    task_desired_(2) = reference_.pose.position.z;
 
-  log3_desired_ = pinocchio::log3(quat_desired_.toRotationMatrix());
-  task_desired_.segment(3, 3) = log3_desired_;
+    log3_desired_ = pinocchio::log3(quat_desired_.toRotationMatrix());
+    task_desired_.segment(3, 3) = log3_desired_;
+  }
+  else
+  {
+    task_desired_.segment(0, kCartesianDim) = task_states_.head<kCartesianDim>();
+  }
 
+  // Cartesian velocity
   task_desired_(6) = reference_.pose_twist.linear.x;
   task_desired_(7) = reference_.pose_twist.linear.y;
   task_desired_(8) = reference_.pose_twist.linear.z;
   task_desired_(9) = reference_.pose_twist.angular.x;
   task_desired_(10) = reference_.pose_twist.angular.y;
   task_desired_(11) = reference_.pose_twist.angular.z;
+}
+
+bool MPCIController::validate_reference()
+{
+  return !Eigen::Vector3d(
+            reference_.pose.position.x, reference_.pose.position.y, reference_.pose.position.z)
+            .isZero(1e-9);
 }
 
 void MPCIController::publish_status()
@@ -308,9 +327,6 @@ void MPCIController::compute_hamiltonian()
 {
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
-
-  robot_data_->M.triangularView<Eigen::StrictlyLower>() =
-    robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
   desired_inertia_ = jacobianT_pinv_ * robot_data_->M * jacobian_pinv_;
 
   // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_.
@@ -324,9 +340,6 @@ void MPCIController::compute_hamiltonian()
   hamiltonian_last_ = hamiltonian_filtered_;
 
   // for status:
-  impedance_wrench_.noalias() =
-    (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
-
   if (has_effort_states_)
   {
     estimated_wrench_.noalias() = jacobianT_pinv_ * (robot_efforts_ - effort_commands_);
