@@ -174,16 +174,6 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
     impedance_wrench_.noalias() =
       (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
     tau_desired_ = jacobian_.transpose() * impedance_wrench_;
-    Eigen::SelfAdjointEigenSolver<ros2_impedance_controller::MatrixXr> eigensolver(H_qp_);
-    if (debug_)
-    {
-      double lambda_min = std::abs(eigensolver.eigenvalues().minCoeff());
-      double lambda_max = std::abs(eigensolver.eigenvalues().maxCoeff());
-      RCLCPP_INFO_STREAM(
-        get_node()->get_logger(),
-        "H_qp_: " << std::fixed << std::setprecision(2) << lambda_max / lambda_min);
-      debug_ = false;
-    }
   }
   else
   {
@@ -191,6 +181,15 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
   }
 
   effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
+  /*
+  if (debug_)
+  {
+    RCLCPP_INFO_STREAM(
+      get_node()->get_logger(),
+      "H_qp_: " << std::fixed << std::setprecision(2) << H_qp_);
+    debug_ = false;
+  }
+  */
 
   compute_hamiltonian();
   return controller_interface::CallbackReturn::SUCCESS;

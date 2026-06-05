@@ -77,6 +77,8 @@ void NonlinearCartesianController::custom_configuration()
   jacobian_pinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
   jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
   jsim_jpinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
+  jsim_jpinv_dj_ = Eigen::MatrixXd::Zero(get_dof(), get_dof());
+  jacobian_dt_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
 }
 
 void NonlinearCartesianController::custom_activation()
@@ -166,7 +168,7 @@ void NonlinearCartesianController::publish_status()
   status_msg_.data[19] = desired_stiffness_.diagonal()(1);
   status_msg_.data[20] = desired_stiffness_.diagonal()(2);
   status_msg_.data[21] = accel_deviation_(3);
-  status_msg_.data[22] = accel_deviation_(4);
+  status_msg_.data[22] = is_dissipative_;
   status_msg_.data[23] = divergence_;
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
@@ -207,6 +209,15 @@ void NonlinearCartesianController::update_damping()
     jacobian_dt_);
 
   jsim_jpinv_dj_ = jsim_jpinv_ * jacobian_dt_;
+
+  // Partitioning check
+  is_dissipative_ = true;
+  for (size_t i = 0; i < get_dof(); i++)
+  {
+    auto mInv_col = robot_data_->Minv.col(i);
+    is_dissipative_ &= desired_damping_.diagonal()(i) >
+                       -jsim_jpinv_dj_.row(i).dot(mInv_col) / jacobian_.row(i).dot(mInv_col);
+  }
 
   // Phase space (q,p) divergence:
   divergence_ = -((jsim_jpinv_dj_ + desired_damping_ * jacobian_) * robot_data_->Minv).trace();

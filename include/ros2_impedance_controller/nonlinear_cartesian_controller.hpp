@@ -116,6 +116,7 @@ protected:
 
   // Phase space divergence
   double divergence_{0.0};
+  bool is_dissipative_{false};
 
   // Command terms
   VectorXd tau_desired_;
