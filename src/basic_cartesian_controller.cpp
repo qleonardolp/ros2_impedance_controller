@@ -170,7 +170,7 @@ void BasicCartesianController::publish_status()
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
 
-  status_rt_publisher_->try_publish(status_msg_);
+  status_rt_publisher_->tryPublish(status_msg_);
 }
 
 void BasicCartesianController::compute_hamiltonian()

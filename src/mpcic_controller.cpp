@@ -301,7 +301,7 @@ void MPCIController::publish_status()
   status_msg_.data[16] = cputime_qp_;                 // CPU time spent to solve
   status_msg_.data[17] = static_cast<int>(sqp_ret_);  // check QP status
 
-  status_rt_publisher_->try_publish(status_msg_);
+  status_rt_publisher_->tryPublish(status_msg_);
 }
 
 void MPCIController::compute_hamiltonian()

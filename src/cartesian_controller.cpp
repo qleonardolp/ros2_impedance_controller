@@ -225,7 +225,7 @@ void CartesianController::publish_status()
   status_msg_.data[22] = accel_deviation_(4);
   status_msg_.data[23] = accel_deviation_(5);
 
-  status_rt_publisher_->try_publish(status_msg_);
+  status_rt_publisher_->tryPublish(status_msg_);
 }
 
 void CartesianController::compute_hamiltonian()
