@@ -241,11 +241,7 @@ controller_interface::return_type ImpedanceControllerBase::update(
 
   for (uint8_t k = 0; k < degrees_of_freedom_; ++k)
   {
-    if (!effort_command_interfaces_[k]->set_value(effort_commands_(k)))
-    {
-      RCLCPP_ERROR(get_node()->get_logger(), "Failed to set command interface value");
-      return controller_interface::return_type::ERROR;
-    }
+    effort_command_interfaces_[k]->set_value(effort_commands_(k));
   }
 
   publish_status();  // Derived class-specific diagnostic publisher
@@ -279,19 +275,11 @@ bool ImpedanceControllerBase::update_robot()
 {
   for (uint8_t k = 0; k < degrees_of_freedom_; k++)
   {
-    std::optional position = position_interfaces_[k]->get_optional();
-    std::optional velocity = velocity_interfaces_[k]->get_optional();
-    std::optional effort = effort_interfaces_[k]->get_optional();
-
-    if (!position.has_value() || !velocity.has_value()) return false;
-
-    if (has_effort_states_ && !effort.has_value()) return false;
-
-    robot_q_(k) = position.value();
-    robot_dq_(k) = velocity.value();
+    robot_q_(k) = position_interfaces_[k]->get_value();
+    robot_dq_(k) = velocity_interfaces_[k]->get_value();
     if (has_effort_states_)
     {
-      robot_efforts_(k) = effort.value();
+      robot_efforts_(k) = effort_interfaces_[k]->get_value();
     }
   }
 
