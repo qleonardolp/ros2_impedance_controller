@@ -84,15 +84,19 @@ void NonlinearCartesianController::custom_configuration()
 void NonlinearCartesianController::custom_activation()
 {
   // Dynamic size members (joint space dim)
-  tau_desired_.setZero();
-
   impedance_wrench_.setZero();
   estimated_wrench_.setZero();
+  tau_desired_.setZero();
 
   // PH related
   impedance_expected_input_.setZero();
   hamiltonian_filtered_ = 0.0;
   hamiltonian_last_ = 0.0;
+
+  observations_.setOnes();
+  observer_A_.setOnes();
+  vel_series_.setZero();
+  imp_series_.setZero();
 }
 
 controller_interface::CallbackReturn NonlinearCartesianController::update_effort_commands()
@@ -110,6 +114,8 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
 
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
+
+  observe_inertia_and_disturbance();
 
   update_stiffness();
   update_damping();
@@ -167,9 +173,9 @@ void NonlinearCartesianController::publish_status()
   status_msg_.data[18] = desired_stiffness_.diagonal()(0);
   status_msg_.data[19] = desired_stiffness_.diagonal()(1);
   status_msg_.data[20] = desired_stiffness_.diagonal()(2);
-  status_msg_.data[21] = accel_deviation_(3);
-  status_msg_.data[22] = is_dissipative_;
-  status_msg_.data[23] = divergence_;
+  status_msg_.data[21] = -0.004 / observations_(1);  //
+  status_msg_.data[22] = actual_inertia_(0, 0);      // m_xx ground truth
+  status_msg_.data[23] = observations_(0);           // should be 1
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
 
@@ -221,6 +227,27 @@ void NonlinearCartesianController::update_damping()
 
   // Phase space (q,p) divergence:
   divergence_ = -((jsim_jpinv_dj_ + desired_damping_ * jacobian_) * robot_data_->Minv).trace();
+}
+
+void NonlinearCartesianController::observe_inertia_and_disturbance()
+{
+  // roll along 4 samples
+  for (size_t k = 3; k > 0; --k)
+  {
+    vel_series_(k) = vel_series_(k - 1);
+    imp_series_(k) = imp_series_(k - 1);
+  }
+  vel_series_(0) = actual_twist_(0);      // 'x' only
+  imp_series_(0) = impedance_wrench_(0);  // 'x' only
+  // Remember: after that we have
+  // (0) -> k+3
+  // (1) -> k+2
+  // (2) -> k+1
+  // (3) -> k
+  observer_A_.col(0) = vel_series_.tail<3>();
+  observer_A_.col(1) = imp_series_.tail<3>();
+
+  observations_ = observer_A_.colPivHouseholderQr().solve(vel_series_.head<3>());
 }
 
 }  // namespace ros2_impedance_controller

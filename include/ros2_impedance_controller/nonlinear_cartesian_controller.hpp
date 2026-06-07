@@ -81,6 +81,8 @@ protected:
    */
   void update_damping();
 
+  void observe_inertia_and_disturbance();
+
   std::shared_ptr<::nonlinear_controller::ParamListener> param_listener_;
   ::nonlinear_controller::Params params_;
 
@@ -117,6 +119,13 @@ protected:
   // Phase space divergence
   double divergence_{0.0};
   bool is_dissipative_{false};
+
+  // Inertia and disturbance observer (DMD-inspired)
+  Eigen::Vector4d vel_series_;
+  Eigen::Vector4d imp_series_;
+  Eigen::Vector3d observations_;
+  Eigen::Matrix3d observer_A_;
+  // end of observer
 
   // Command terms
   VectorXd tau_desired_;
