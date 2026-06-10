@@ -147,8 +147,6 @@ protected:
 
   // Desired impedance wrench [forces, torques].T
   Vector6d impedance_wrench_;
-  // Interaction wrench estimation
-  Vector6d estimated_wrench_;
 
   // Command terms
   Eigen::VectorXd tau_desired_;

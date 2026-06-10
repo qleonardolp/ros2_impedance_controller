@@ -79,8 +79,6 @@ protected:
 
   // Desired impedance wrench [forces, torques].T
   Vector6d impedance_wrench_;
-  // Interaction wrench estimation
-  Vector6d estimated_wrench_;
   // End effector task space twist derivative
   Vector6d accel_deviation_;
 

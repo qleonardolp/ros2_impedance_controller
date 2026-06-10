@@ -100,6 +100,9 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_configure(
   // Initialize dynamic Eigen members
   robot_q_.resize(degrees_of_freedom_);
   robot_dq_.resize(degrees_of_freedom_);
+  robot_dq_last_.resize(degrees_of_freedom_);
+  robot_ddq_.resize(degrees_of_freedom_);
+  fint_residual_.resize(degrees_of_freedom_);
   robot_efforts_.resize(degrees_of_freedom_);
   effort_commands_.resize(degrees_of_freedom_);
   jacobian_ = Matrix6Xd::Zero(kCartesianDim, degrees_of_freedom_);
@@ -146,6 +149,8 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   // Dynamic size members (joint space dim)
   jacobian_.setZero();
   effort_commands_.setZero();
+  robot_efforts_.setZero();
+  robot_dq_last_.setZero();
 
   // ros2_control interfaces
   effort_command_interfaces_.resize(degrees_of_freedom_, nullptr);
@@ -156,15 +161,18 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   // Constant size members (task space dim)
   pose_deviation_.setZero();
   twist_deviation_.setZero();
-  desired_pose_accel_.setZero();
 
+  desired_pose_accel_.setZero();
   desired_quaternion_.setIdentity();
   desired_position_.setZero();
   desired_twist_.setZero();
+
   actual_pose_.setZero();
   actual_twist_.setZero();
   actual_twist_last_.setZero();
   actual_accel_.setZero();
+
+  estimated_wrench_.setZero();
 
   for (const auto & interface : state_interfaces_)  // LoanedStateInterface from the base class
   {
@@ -230,8 +238,7 @@ controller_interface::return_type ImpedanceControllerBase::update(
   // Read state interfaces and update robot
   if (!update_robot())
   {
-    RCLCPP_ERROR(
-      get_node()->get_logger(), "Failed to update robot model with state interfaces data");
+    RCLCPP_ERROR(get_node()->get_logger(), "Failed to update robot data with states");
     return controller_interface::return_type::ERROR;
   }
 
@@ -294,13 +301,32 @@ bool ImpedanceControllerBase::update_robot()
       robot_efforts_(k) = effort.value();
     }
   }
+  // Acceleration: finite difference
+  robot_ddq_ = (robot_dq_ - robot_dq_last_) / delta_t_;
+  robot_dq_last_ = robot_dq_;
 
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_q_, robot_dq_);
   // fill M(q)
   robot_data_->M.triangularView<Eigen::StrictlyLower>() =
     robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
 
+  estimate_interaction_wrench();
   return true;
+}
+
+void ImpedanceControllerBase::estimate_interaction_wrench()
+{
+  fint_residual_.noalias() = robot_data_->M * robot_ddq_ + robot_data_->nle;
+
+  if (has_effort_states_)
+  {
+    fint_residual_ -= robot_efforts_;
+  }
+  else
+  {
+    fint_residual_ -= effort_commands_;
+  }
+  estimated_wrench_.noalias() = jacobian_.transpose().colPivHouseholderQr().solve(fint_residual_);
 }
 
 void ImpedanceControllerBase::update_deviation_and_reference()

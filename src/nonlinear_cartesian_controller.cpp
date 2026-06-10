@@ -85,7 +85,6 @@ void NonlinearCartesianController::custom_activation()
 {
   // Dynamic size members (joint space dim)
   impedance_wrench_.setZero();
-  estimated_wrench_.setZero();
   tau_desired_.setZero();
 
   // PH related
@@ -104,11 +103,6 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
   update_start_ = steady_clock_->now();
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
-
-  if (has_effort_states_)
-  {
-    estimated_wrench_.noalias() = jacobianT_pinv_ * (robot_efforts_ - effort_commands_);
-  }
 
   accel_deviation_.noalias() = actual_accel_;
 

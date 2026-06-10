@@ -124,7 +124,6 @@ void MPCIController::custom_activation()
   tau_desired_.setZero();
   task_states_.setZero();
   impedance_wrench_.setZero();
-  estimated_wrench_.setZero();
 
   // PH related
   hamiltonian_filtered_ = 0.0;
@@ -337,12 +336,6 @@ void MPCIController::compute_hamiltonian()
     cmd_lpf_alpha_ * hamiltonian_ + (1.0 - cmd_lpf_alpha_) * hamiltonian_filtered_;
   hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / delta_t_;
   hamiltonian_last_ = hamiltonian_filtered_;
-
-  // for status:
-  if (has_effort_states_)
-  {
-    estimated_wrench_.noalias() = jacobianT_pinv_ * (robot_efforts_ - effort_commands_);
-  }
 }
 
 }  // namespace ros2_impedance_controller

@@ -170,6 +170,12 @@ protected:
    */
   void configure_visualization_marker();
 
+  /**
+   * @brief Compute the interaction wrench (\$ f_int \$) from inverse dynamics
+   * and joint torques/forces. Must have 'has_effort_states' true.
+   */
+  void estimate_interaction_wrench();
+
   size_t get_dof();
 
   // Parameter defined members
@@ -222,8 +228,7 @@ protected:
   // Operational space inertia matrix (osim)
   Matrix6d actual_inertia_;
 
-  // Joint to task space geometric Jacobian
-  Matrix6Xd jacobian_;
+  Matrix6Xd jacobian_;  // Joint to task space geometric Jacobian
 
   // Task space variables
   Vector6d actual_pose_;
@@ -234,13 +239,17 @@ protected:
   Vector6d desired_pose_accel_;  // Desired end effector twist derivative
   Eigen::Quaterniond desired_quaternion_;
   Eigen::Vector3d desired_position_;
-  Vector6d pose_deviation_;   // End effector pose deviation
-  Vector6d twist_deviation_;  // End effector twist deviation
+  Vector6d pose_deviation_;    // End effector pose deviation
+  Vector6d twist_deviation_;   // End effector twist deviation
+  Vector6d estimated_wrench_;  // Interaction wrench estimation
 
   // Joint space state vectors
   VectorXd robot_q_;        // robot joint positions
   VectorXd robot_dq_;       // robot joint velocities
+  VectorXd robot_dq_last_;  // robot joint velocities (last)
+  VectorXd robot_ddq_;      // robot joint accelerations
   VectorXd robot_efforts_;  // robot joint efforts (torque or force)
+  VectorXd fint_residual_;  // joint space residual for f_int estimation
 
   // Controller command vector (joint space)
   VectorXd effort_commands_;

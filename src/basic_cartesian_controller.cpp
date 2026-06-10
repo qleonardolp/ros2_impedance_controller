@@ -86,7 +86,6 @@ void BasicCartesianController::custom_activation()
   tau_desired_.setZero();
 
   impedance_wrench_.setZero();
-  estimated_wrench_.setZero();
 
   // PH related
   impedance_expected_input_.setZero();
@@ -99,11 +98,6 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   update_start_ = steady_clock_->now();
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
-
-  if (has_effort_states_)
-  {
-    estimated_wrench_.noalias() = jacobianT_pinv_ * (robot_efforts_ - effort_commands_);
-  }
 
   accel_deviation_.noalias() = actual_accel_ - desired_pose_accel_;
 
