@@ -155,12 +155,12 @@ void BasicCartesianController::publish_status()
   status_msg_.data[16] = twist_deviation_(4);
   status_msg_.data[17] = twist_deviation_(5);
 
-  status_msg_.data[18] = accel_deviation_(0);
-  status_msg_.data[19] = accel_deviation_(1);
-  status_msg_.data[20] = accel_deviation_(2);
-  status_msg_.data[21] = accel_deviation_(3);
-  status_msg_.data[22] = accel_deviation_(4);
-  status_msg_.data[23] = accel_deviation_(5);
+  status_msg_.data[18] = estimated_wrench_(0);
+  status_msg_.data[19] = estimated_wrench_(1);
+  status_msg_.data[20] = estimated_wrench_(2);
+  status_msg_.data[21] = estimated_wrench_(3);
+  status_msg_.data[22] = estimated_wrench_(4);
+  status_msg_.data[23] = estimated_wrench_(5);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
 

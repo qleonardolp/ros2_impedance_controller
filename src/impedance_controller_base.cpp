@@ -288,16 +288,14 @@ bool ImpedanceControllerBase::update_robot()
   {
     std::optional position = position_interfaces_[k]->get_optional();
     std::optional velocity = velocity_interfaces_[k]->get_optional();
-    std::optional effort = effort_interfaces_[k]->get_optional();
-
     if (!position.has_value() || !velocity.has_value()) return false;
-
-    if (has_effort_states_ && !effort.has_value()) return false;
 
     robot_q_(k) = position.value();
     robot_dq_(k) = velocity.value();
     if (has_effort_states_)
     {
+      std::optional effort = effort_interfaces_[k]->get_optional();
+      if (!effort.has_value()) return false;
       robot_efforts_(k) = effort.value();
     }
   }
@@ -316,11 +314,11 @@ bool ImpedanceControllerBase::update_robot()
 
 void ImpedanceControllerBase::estimate_interaction_wrench()
 {
-  fint_residual_.noalias() = robot_data_->M * robot_ddq_ + robot_data_->nle;
+  fint_residual_.noalias() = robot_data_->nle;  // + robot_data_->M * robot_ddq_ (but ddq is noisy)
 
   if (has_effort_states_)
   {
-    fint_residual_ -= robot_efforts_;
+    fint_residual_ -= robot_efforts_;  // TODO(@me): filtering, \tau is noisy
   }
   else
   {
