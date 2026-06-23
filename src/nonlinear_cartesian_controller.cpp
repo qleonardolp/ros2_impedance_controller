@@ -63,6 +63,7 @@ controller_interface::CallbackReturn NonlinearCartesianController::read_paramete
     return controller_interface::CallbackReturn::ERROR;
   }
   nominal_damping_ = Vector6d(params_.damping.data()).asDiagonal();  // Nominal damping
+  desired_damping_ = nominal_damping_;
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -109,10 +110,10 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
 
-  observe_inertia_and_disturbance();
+  // observe_inertia_and_disturbance();
 
   update_stiffness();
-  update_damping();
+  // update_damping();
 
   impedance_wrench_.noalias() =
     (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
@@ -164,12 +165,12 @@ void NonlinearCartesianController::publish_status()
   status_msg_.data[16] = twist_deviation_(4);
   status_msg_.data[17] = twist_deviation_(5);
 
-  status_msg_.data[18] = desired_stiffness_.diagonal()(0);
-  status_msg_.data[19] = desired_stiffness_.diagonal()(1);
-  status_msg_.data[20] = desired_stiffness_.diagonal()(2);
-  status_msg_.data[21] = -0.004 / observations_(1);  //
-  status_msg_.data[22] = actual_inertia_(0, 0);      // m_xx ground truth
-  status_msg_.data[23] = observations_(0);           // should be 1
+  status_msg_.data[18] = estimated_wrench_(0);
+  status_msg_.data[19] = estimated_wrench_(1);
+  status_msg_.data[20] = estimated_wrench_(2);
+  status_msg_.data[21] = desired_stiffness_.diagonal()(0);
+  status_msg_.data[22] = desired_stiffness_.diagonal()(1);
+  status_msg_.data[23] = desired_stiffness_.diagonal()(2);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
 

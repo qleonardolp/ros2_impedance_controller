@@ -314,11 +314,11 @@ bool ImpedanceControllerBase::update_robot()
 
 void ImpedanceControllerBase::estimate_interaction_wrench()
 {
-  fint_residual_.noalias() = robot_data_->nle;  // + robot_data_->M * robot_ddq_ (but ddq is noisy)
+  fint_residual_.noalias() = robot_data_->nle + robot_data_->M * robot_ddq_;
 
   if (has_effort_states_)
   {
-    fint_residual_ -= robot_efforts_;  // TODO(@me): filtering, \tau is noisy
+    fint_residual_ -= robot_efforts_;
   }
   else
   {
