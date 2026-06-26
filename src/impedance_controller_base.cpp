@@ -234,7 +234,7 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_deactivate(
 controller_interface::return_type ImpedanceControllerBase::update(
   const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
 {
-  delta_t_ = static_cast<double>((time - clock_time_last_).nanoseconds()) * 1E-9;
+  delta_t_ = (time - clock_time_last_).seconds();
   // Read state interfaces and update robot
   if (!update_robot())
   {
@@ -314,7 +314,7 @@ bool ImpedanceControllerBase::update_robot()
 
 void ImpedanceControllerBase::estimate_interaction_wrench()
 {
-  fint_residual_.noalias() = robot_data_->nle + robot_data_->M * robot_ddq_;
+  fint_residual_.noalias() = robot_data_->nle;  // + robot_data_->M * robot_ddq_;
 
   if (has_effort_states_)
   {
@@ -336,8 +336,7 @@ void ImpedanceControllerBase::update_deviation_and_reference()
   actual_twist_.noalias() = jacobian_ * robot_dq_;
 
   // Compute `interaction_link` task space acceleration
-  actual_accel_ = acc_lpf_alpha_ / delta_t_ * (actual_twist_ - actual_twist_last_) +
-                  (1.0 - acc_lpf_alpha_) * actual_accel_;
+  actual_accel_ = (actual_twist_ - actual_twist_last_) / delta_t_;
   actual_twist_last_.noalias() = actual_twist_;
 
   auto ref_optional = rt_reference_.try_get();
