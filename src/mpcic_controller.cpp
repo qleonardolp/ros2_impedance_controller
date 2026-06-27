@@ -123,7 +123,6 @@ void MPCIController::custom_activation()
 {
   tau_desired_.setZero();
   task_states_.setZero();
-  impedance_wrench_.setZero();
 
   // PH related
   hamiltonian_filtered_ = 0.0;

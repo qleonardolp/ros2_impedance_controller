@@ -77,8 +77,6 @@ protected:
   // Expected impedance input (u)
   Vector6d impedance_expected_input_;
 
-  // Desired impedance wrench [forces, torques].T
-  Vector6d impedance_wrench_;
   // Interaction wrench [forces, torques].T
   Vector6d sensor_wrench_;
   // End effector task space twist derivative

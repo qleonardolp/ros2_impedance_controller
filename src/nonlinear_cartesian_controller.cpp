@@ -85,7 +85,6 @@ void NonlinearCartesianController::custom_configuration()
 void NonlinearCartesianController::custom_activation()
 {
   // Dynamic size members (joint space dim)
-  impedance_wrench_.setZero();
   tau_desired_.setZero();
 
   // PH related
@@ -115,12 +114,11 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
   update_stiffness();
   // update_damping();
 
-  impedance_wrench_.noalias() =
-    (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
-
   desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
 
-  tau_desired_.noalias() = jacobian_.transpose() * impedance_wrench_;
+  impedance_wrench_.noalias() =
+    desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
+  tau_desired_.noalias() = -jacobian_.transpose() * impedance_wrench_;
 
   if (params_.gravity_compensation)
   {

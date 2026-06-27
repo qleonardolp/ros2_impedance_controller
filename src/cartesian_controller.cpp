@@ -133,8 +133,6 @@ void CartesianController::custom_activation()
   impedance_torques_.setZero();
   tau_desired_.setZero();
 
-  impedance_wrench_.setZero();
-
   // PH related
   impedance_expected_input_.setZero();
   hamiltonian_filtered_ = 0.0;

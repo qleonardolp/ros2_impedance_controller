@@ -175,6 +175,7 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   twist_last2_.setZero();
   actual_accel_.setZero();
 
+  impedance_wrench_.setZero();
   estimated_wrench_.setZero();
 
   for (const auto & interface : state_interfaces_)  // LoanedStateInterface from the base class

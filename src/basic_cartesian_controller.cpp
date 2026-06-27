@@ -84,9 +84,6 @@ void BasicCartesianController::custom_activation()
   // Dynamic size members (joint space dim)
   accel_feedforward_.setZero();
   tau_desired_.setZero();
-
-  impedance_wrench_.setZero();
-
   // PH related
   impedance_expected_input_.setZero();
   hamiltonian_filtered_ = 0.0;
@@ -103,14 +100,13 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
 
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
-
-  impedance_wrench_.noalias() =
-    (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
-
   desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
 
+  impedance_wrench_.noalias() =
+    desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
+
   accel_feedforward_ = jsim_jpinv_ * desired_accel_;
-  tau_desired_.noalias() = jacobian_.transpose() * impedance_wrench_ + accel_feedforward_;
+  tau_desired_.noalias() = accel_feedforward_ - jacobian_.transpose() * impedance_wrench_;
 
   if (params_.gravity_compensation)
   {
@@ -138,7 +134,7 @@ void BasicCartesianController::publish_status()
   // Impedance Hamiltonian derivative
   status_msg_.data[4] = actual_inertia_(2, 2);  // trying to visualize m_zz
   // Impedance I/O power
-  status_msg_.data[5] = twist_deviation_.transpose() * impedance_wrench_;
+  status_msg_.data[5] = -twist_deviation_.transpose() * impedance_wrench_;
 
   // Impedance space:
   status_msg_.data[6] = pose_deviation_(0);

@@ -227,6 +227,8 @@ protected:
   Matrix6d desired_inertia_;
   // Operational space inertia matrix (osim)
   Matrix6d actual_inertia_;
+  // Desired impedance wrench [forces, torques].T
+  Vector6d impedance_wrench_;
 
   Matrix6Xd jacobian_;  // Joint to task space geometric Jacobian
 

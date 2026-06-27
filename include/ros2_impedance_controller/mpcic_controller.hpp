@@ -145,9 +145,6 @@ protected:
   double hamiltonian_filtered_{0};
   double hamiltonian_derivative_{0};
 
-  // Desired impedance wrench [forces, torques].T
-  Vector6d impedance_wrench_;
-
   // Command terms
   Eigen::VectorXd tau_desired_;
 
