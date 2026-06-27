@@ -149,7 +149,7 @@ protected:
    * The orientation part is computed using Lie algebra (pinocchio::log3),
    * free of gimbal lock errors. Twist deviation is =
    * desired_twist - \f$ J(q)*\dot{q} \f$. This method also updates
-   * desired_pose_accel_.
+   * desired_accel_.
    */
   void update_deviation_and_reference();
 
@@ -232,11 +232,12 @@ protected:
 
   // Task space variables
   Vector6d actual_pose_;
-  Vector6d actual_twist_;
-  Vector6d actual_twist_last_;
+  Vector6d twist_;
+  Vector6d twist_last_;
+  Vector6d twist_last2_;
   Vector6d actual_accel_;
   Vector6d desired_twist_;
-  Vector6d desired_pose_accel_;  // Desired end effector twist derivative
+  Vector6d desired_accel_;  // Desired end effector twist derivative
   Eigen::Quaterniond desired_quaternion_;
   Eigen::Vector3d desired_position_;
   Vector6d pose_deviation_;    // End effector pose deviation
@@ -244,12 +245,13 @@ protected:
   Vector6d estimated_wrench_;  // Interaction wrench estimation
 
   // Joint space state vectors
-  VectorXd robot_q_;        // robot joint positions
-  VectorXd robot_dq_;       // robot joint velocities
-  VectorXd robot_dq_last_;  // robot joint velocities (last)
-  VectorXd robot_ddq_;      // robot joint accelerations
-  VectorXd robot_efforts_;  // robot joint efforts (torque or force)
-  VectorXd fint_residual_;  // joint space residual for f_int estimation
+  VectorXd robot_q_;         // robot joint positions
+  VectorXd robot_dq_;        // robot joint velocities
+  VectorXd robot_dq_last_;   // robot joint velocities (k-1)
+  VectorXd robot_dq_last2_;  // robot joint velocities (k-2)
+  VectorXd robot_ddq_;       // robot joint accelerations
+  VectorXd robot_efforts_;   // robot joint efforts (torque or force)
+  VectorXd fint_residual_;   // joint space residual for f_int estimation
 
   // Controller command vector (joint space)
   VectorXd effort_commands_;

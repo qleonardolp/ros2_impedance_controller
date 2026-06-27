@@ -142,7 +142,7 @@ void NonlinearCartesianController::publish_status()
   // Commands input power
   status_msg_.data[1] = robot_dq_.transpose() * effort_commands_;
   // Interaction power using estimated interaction wrench
-  status_msg_.data[2] = actual_twist_.transpose() * estimated_wrench_;
+  status_msg_.data[2] = twist_.transpose() * estimated_wrench_;
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative
@@ -232,7 +232,7 @@ void NonlinearCartesianController::observe_inertia_and_disturbance()
     vel_series_(k) = vel_series_(k - 1);
     imp_series_(k) = imp_series_(k - 1);
   }
-  vel_series_(0) = actual_twist_(0);      // 'x' only
+  vel_series_(0) = twist_(0);             // 'x' only
   imp_series_(0) = impedance_wrench_(0);  // 'x' only
   // Remember: after that we have
   // (0) -> k+3

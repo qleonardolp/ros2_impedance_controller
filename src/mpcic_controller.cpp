@@ -243,7 +243,7 @@ void MPCIController::update_taskstates()
   actual_pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
   actual_pose_.tail<3>() = pinocchio::log3(robot_data_.get()->oMf[end_effector_frame_].rotation());
   task_states_.head<kCartesianDim>() = actual_pose_;
-  task_states_.tail<kCartesianDim>() = actual_twist_;  // updated from the base class
+  task_states_.tail<kCartesianDim>() = twist_;  // updated from the base class
 }
 
 void MPCIController::update_references()
@@ -297,7 +297,7 @@ void MPCIController::publish_status()
   // Commands input power
   status_msg_.data[1] = robot_dq_.transpose() * effort_commands_;
   // Interaction power using estimated interaction wrench
-  status_msg_.data[2] = actual_twist_.transpose() * estimated_wrench_;
+  status_msg_.data[2] = twist_.transpose() * estimated_wrench_;
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative

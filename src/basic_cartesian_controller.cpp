@@ -99,7 +99,7 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
 
-  accel_deviation_.noalias() = actual_accel_ - desired_pose_accel_;
+  accel_deviation_.noalias() = actual_accel_ - desired_accel_;
 
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
@@ -109,7 +109,7 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
 
   desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
 
-  accel_feedforward_ = jsim_jpinv_ * desired_pose_accel_;
+  accel_feedforward_ = jsim_jpinv_ * desired_accel_;
   tau_desired_.noalias() = jacobian_.transpose() * impedance_wrench_ + accel_feedforward_;
 
   if (params_.gravity_compensation)
@@ -132,7 +132,7 @@ void BasicCartesianController::publish_status()
   // Commands input power
   status_msg_.data[1] = robot_dq_.transpose() * effort_commands_;
   // Interaction power using estimated interaction wrench
-  status_msg_.data[2] = actual_twist_.transpose() * estimated_wrench_;
+  status_msg_.data[2] = twist_.transpose() * estimated_wrench_;
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative

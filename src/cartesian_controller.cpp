@@ -150,7 +150,7 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
     robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
     jacobian_dt_);
 
-  accel_deviation_.noalias() = actual_accel_ - desired_pose_accel_;
+  accel_deviation_.noalias() = actual_accel_ - desired_accel_;
 
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   jsim_jpinv_dj_ = jsim_jpinv_ * jacobian_dt_;
@@ -172,7 +172,7 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
     desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
   }
 
-  accel_feedforward_ = jsim_jpinv_ * desired_pose_accel_;
+  accel_feedforward_ = jsim_jpinv_ * desired_accel_;
   twist_compensation_.noalias() = (robot_data_->C - jsim_jpinv_dj_) * robot_dq_;
   tau_desired_ = accel_feedforward_ + impedance_torques_ + twist_compensation_ + robot_data_->g;
 
@@ -189,7 +189,7 @@ void CartesianController::publish_status()
   // Commands input power
   status_msg_.data[1] = robot_dq_.transpose() * effort_commands_;
   // Interaction power using F/T Sensor (ground truth)
-  status_msg_.data[2] = actual_twist_.transpose() * sensor_wrench_;
+  status_msg_.data[2] = twist_.transpose() * sensor_wrench_;
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative

@@ -101,6 +101,7 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_configure(
   robot_q_.resize(degrees_of_freedom_);
   robot_dq_.resize(degrees_of_freedom_);
   robot_dq_last_.resize(degrees_of_freedom_);
+  robot_dq_last2_.resize(degrees_of_freedom_);
   robot_ddq_.resize(degrees_of_freedom_);
   fint_residual_.resize(degrees_of_freedom_);
   robot_efforts_.resize(degrees_of_freedom_);
@@ -151,6 +152,7 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   effort_commands_.setZero();
   robot_efforts_.setZero();
   robot_dq_last_.setZero();
+  robot_dq_last2_.setZero();
 
   // ros2_control interfaces
   effort_command_interfaces_.resize(degrees_of_freedom_, nullptr);
@@ -162,14 +164,15 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   pose_deviation_.setZero();
   twist_deviation_.setZero();
 
-  desired_pose_accel_.setZero();
+  desired_accel_.setZero();
   desired_quaternion_.setIdentity();
   desired_position_.setZero();
   desired_twist_.setZero();
 
   actual_pose_.setZero();
-  actual_twist_.setZero();
-  actual_twist_last_.setZero();
+  twist_.setZero();
+  twist_last_.setZero();
+  twist_last2_.setZero();
   actual_accel_.setZero();
 
   estimated_wrench_.setZero();
@@ -299,9 +302,10 @@ bool ImpedanceControllerBase::update_robot()
       robot_efforts_(k) = effort.value();
     }
   }
-  // Acceleration: finite difference
-  robot_ddq_ = (robot_dq_ - robot_dq_last_) / delta_t_;
-  robot_dq_last_ = robot_dq_;
+  // Acceleration: central differentiation
+  robot_ddq_ = (robot_dq_ - robot_dq_last2_) / (2 * delta_t_);
+  robot_dq_last2_ = robot_dq_last_;  // k-2 <- k-1
+  robot_dq_last_ = robot_dq_;        // k-1 <- k
 
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_q_, robot_dq_);
   // fill M(q)
@@ -333,11 +337,12 @@ void ImpedanceControllerBase::update_deviation_and_reference()
     robot_model_, *robot_data_.get(), robot_q_, end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
     jacobian_);
 
-  actual_twist_.noalias() = jacobian_ * robot_dq_;
+  twist_.noalias() = jacobian_ * robot_dq_;
 
   // Compute `interaction_link` task space acceleration
-  actual_accel_ = (actual_twist_ - actual_twist_last_) / delta_t_;
-  actual_twist_last_.noalias() = actual_twist_;
+  actual_accel_ = (twist_ - twist_last2_) / (2 * delta_t_);
+  twist_last2_.noalias() = twist_last_;
+  twist_last_.noalias() = twist_;
 
   auto ref_optional = rt_reference_.try_get();
 
@@ -383,20 +388,20 @@ void ImpedanceControllerBase::update_deviation_and_reference()
     desired_twist_(4) = reference_.pose_twist.angular.y;
     desired_twist_(5) = reference_.pose_twist.angular.z;
 
-    twist_deviation_.noalias() = actual_twist_ - desired_twist_;
+    twist_deviation_.noalias() = twist_ - desired_twist_;
 
-    desired_pose_accel_(0) = reference_.pose_accel.linear.x;
-    desired_pose_accel_(1) = reference_.pose_accel.linear.y;
-    desired_pose_accel_(2) = reference_.pose_accel.linear.z;
-    desired_pose_accel_(3) = reference_.pose_accel.angular.x;
-    desired_pose_accel_(4) = reference_.pose_accel.angular.y;
-    desired_pose_accel_(5) = reference_.pose_accel.angular.z;
+    desired_accel_(0) = reference_.pose_accel.linear.x;
+    desired_accel_(1) = reference_.pose_accel.linear.y;
+    desired_accel_(2) = reference_.pose_accel.linear.z;
+    desired_accel_(3) = reference_.pose_accel.angular.x;
+    desired_accel_(4) = reference_.pose_accel.angular.y;
+    desired_accel_(5) = reference_.pose_accel.angular.z;
   }
   else
   {
     pose_deviation_.setZero();
-    twist_deviation_.noalias() = actual_twist_;
-    desired_pose_accel_.setZero();
+    twist_deviation_.noalias() = twist_;
+    desired_accel_.setZero();
   }
 }
 
