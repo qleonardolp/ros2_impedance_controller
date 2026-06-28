@@ -94,8 +94,9 @@ protected:
   // Command terms
   VectorXd tau_desired_;
 
-  Matrix6d wrench_input_;   // f_int - K*e - D*de
-  Vector6d twist_delta_;    // dx_{k} - dx_{k-1}
+  Matrix6d accel_delta_;
+  Vector6d accel_last_;
+  Vector6d wrench_delta_;
   Vector6d osim_diagonal_;  // OSIM diagonal estimate
 };
 

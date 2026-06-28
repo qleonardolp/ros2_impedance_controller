@@ -121,13 +121,11 @@ void CartesianController::custom_configuration()
   jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
   jsim_jpinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
   jsim_jpinv_dj_ = Eigen::MatrixXd::Zero(get_dof(), get_dof());
-  jacobian_dt_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
 }
 
 void CartesianController::custom_activation()
 {
   // Dynamic size members (joint space dim)
-  jacobian_dt_.setZero();
   twist_compensation_.setZero();
   accel_feedforward_.setZero();
   impedance_torques_.setZero();
@@ -144,11 +142,7 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
 
-  pinocchio::getFrameJacobianTimeVariation(
-    robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
-    jacobian_dt_);
-
-  accel_deviation_.noalias() = actual_accel_ - desired_accel_;
+  accel_deviation_.noalias() = accel_ - desired_accel_;
 
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   jsim_jpinv_dj_ = jsim_jpinv_ * jacobian_dt_;

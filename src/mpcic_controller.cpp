@@ -239,9 +239,7 @@ void MPCIController::update_QP()
 
 void MPCIController::update_taskstates()
 {
-  actual_pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
-  actual_pose_.tail<3>() = pinocchio::log3(robot_data_.get()->oMf[end_effector_frame_].rotation());
-  task_states_.head<kCartesianDim>() = actual_pose_;
+  task_states_.head<kCartesianDim>() = pose_;
   task_states_.tail<kCartesianDim>() = twist_;  // updated from the base class
 }
 
@@ -304,12 +302,12 @@ void MPCIController::publish_status()
   // Impedance I/O power
   status_msg_.data[5] = twist_deviation_.transpose() * impedance_wrench_;
 
-  status_msg_.data[6] = actual_pose_(0);
-  status_msg_.data[7] = actual_pose_(1);
-  status_msg_.data[8] = actual_pose_(2);
-  status_msg_.data[9] = actual_pose_(3);
-  status_msg_.data[10] = actual_pose_(4);
-  status_msg_.data[11] = actual_pose_(5);
+  status_msg_.data[6] = pose_(0);
+  status_msg_.data[7] = pose_(1);
+  status_msg_.data[8] = pose_(2);
+  status_msg_.data[9] = pose_(3);
+  status_msg_.data[10] = pose_(4);
+  status_msg_.data[11] = pose_(5);
 
   status_msg_.data[12] = tau_desired_(0);
   status_msg_.data[13] = tau_desired_(1);

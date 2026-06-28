@@ -81,7 +81,8 @@ void BasicCartesianController::custom_activation()
   tau_desired_.setZero();
 
   // Fixed size members
-  wrench_input_.setIdentity();
+  accel_last_.setZero();
+  accel_delta_.setIdentity();
 
   // PH related
   impedance_expected_input_.setZero();
@@ -173,11 +174,14 @@ void BasicCartesianController::compute_hamiltonian()
 
 void BasicCartesianController::estimate_inertia_diagonal()
 {
-  wrench_input_ = (estimated_wrench_ - impedance_wrench_).asDiagonal() * (2 * delta_t_);
-  twist_delta_.noalias() = twist_ - twist_last2_;
+  accel_delta_ = (accel_ - accel_last_).asDiagonal();
+  accel_last_ = accel_;
+
+  wrench_delta_ = estimated_wrench_ - wrench_last_;
+  wrench_last_ = estimated_wrench_;
 
   // Solve X for min ||A*X - B||, where B is the arg of .solve()
-  osim_diagonal_ = wrench_input_.completeOrthogonalDecomposition().solve(twist_delta_);
+  osim_diagonal_ = accel_delta_.completeOrthogonalDecomposition().solve(wrench_delta_);
 }
 
 void BasicCartesianController::compute_osim()

@@ -106,7 +106,8 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_configure(
   fint_residual_.resize(degrees_of_freedom_);
   robot_efforts_.resize(degrees_of_freedom_);
   effort_commands_.resize(degrees_of_freedom_);
-  jacobian_ = Matrix6Xd::Zero(kCartesianDim, degrees_of_freedom_);
+  jacobian_ = Matrix6Xd::Zero(kCartesianDim, get_dof());
+  jacobian_dt_ = Matrix6Xd::Zero(kCartesianDim, get_dof());
 
   custom_configuration();  // Derived class-specific configuration
 
@@ -149,6 +150,7 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
 
   // Dynamic size members (joint space dim)
   jacobian_.setZero();
+  jacobian_dt_.setZero();
   effort_commands_.setZero();
   robot_efforts_.setZero();
   robot_dq_last_.setZero();
@@ -169,12 +171,11 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   desired_position_.setZero();
   desired_twist_.setZero();
 
-  actual_pose_.setZero();
+  pose_.setZero();
   twist_.setZero();
-  twist_last_.setZero();
-  twist_last2_.setZero();
-  actual_accel_.setZero();
+  accel_.setZero();
 
+  wrench_last_.setZero();
   impedance_wrench_.setZero();
   estimated_wrench_.setZero();
 
@@ -288,6 +289,7 @@ bool ImpedanceControllerBase::configure_robot_model()
 
 bool ImpedanceControllerBase::update_robot()
 {
+  // Update joint space states
   for (uint8_t k = 0; k < degrees_of_freedom_; k++)
   {
     std::optional position = position_interfaces_[k]->get_optional();
@@ -303,15 +305,32 @@ bool ImpedanceControllerBase::update_robot()
       robot_efforts_(k) = effort.value();
     }
   }
-  // Acceleration: central differentiation
+  // Joint space accel: central differentiation
   robot_ddq_ = (robot_dq_ - robot_dq_last2_) / (2 * delta_t_);
   robot_dq_last2_ = robot_dq_last_;  // k-2 <- k-1
   robot_dq_last_ = robot_dq_;        // k-1 <- k
 
+  // Update pinocchio model data
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_q_, robot_dq_);
   // fill M(q)
   robot_data_->M.triangularView<Eigen::StrictlyLower>() =
     robot_data_->M.transpose().triangularView<Eigen::StrictlyLower>();
+
+  // Update end_effector pose
+  pose_.head<3>() = robot_data_.get()->oMf[end_effector_frame_].translation();
+  pose_.tail<3>() = pinocchio::log3(robot_data_.get()->oMf[end_effector_frame_].rotation());
+
+  // Update end-effector task space velocity (twist)
+  pinocchio::computeFrameJacobian(
+    robot_model_, *robot_data_.get(), robot_q_, end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
+    jacobian_);
+  twist_.noalias() = jacobian_ * robot_dq_;
+
+  // Update end-effector task space acceleration
+  pinocchio::getFrameJacobianTimeVariation(
+    robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
+    jacobian_dt_);
+  accel_ = jacobian_ * robot_ddq_ + jacobian_dt_ * robot_dq_;
 
   estimate_interaction_wrench();
   return true;
@@ -336,17 +355,6 @@ void ImpedanceControllerBase::estimate_interaction_wrench()
 
 void ImpedanceControllerBase::update_deviation_and_reference()
 {
-  pinocchio::computeFrameJacobian(
-    robot_model_, *robot_data_.get(), robot_q_, end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
-    jacobian_);
-
-  twist_.noalias() = jacobian_ * robot_dq_;
-
-  // Compute `interaction_link` task space acceleration
-  actual_accel_ = (twist_ - twist_last2_) / (2 * delta_t_);
-  twist_last2_.noalias() = twist_last_;
-  twist_last_.noalias() = twist_;
-
   auto ref_optional = rt_reference_.try_get();
 
   if (ref_optional.has_value())

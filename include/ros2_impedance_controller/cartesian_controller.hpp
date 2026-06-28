@@ -88,7 +88,6 @@ protected:
   VectorXd impedance_torques_;
   VectorXd tau_desired_;
 
-  Eigen::MatrixXd jacobian_dt_;
   Eigen::MatrixXd jacobian_pinv_;
   Eigen::MatrixXd jacobianT_pinv_;
   Eigen::MatrixXd jsim_jpinv_dj_;

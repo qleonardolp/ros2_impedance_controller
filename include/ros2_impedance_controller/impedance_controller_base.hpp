@@ -137,8 +137,10 @@ protected:
   virtual void custom_activation() = 0;
 
   /**
-   * @brief Update the robot data while running the controller.
-   * State interfaces are fetch and the Forward Kinematics is computed.
+   * @brief Update the robot data by fetching state interfaces. Compute
+   * joint space inertia, M(q), and nonlinear terms, C(q) and g(q).
+   * Jacobian and Jacobian derivative are computed and task space states
+   * `twist_` and `accel_` are updated too.
    */
   bool update_robot();
 
@@ -231,13 +233,12 @@ protected:
   Vector6d impedance_wrench_;
 
   Matrix6Xd jacobian_;  // Joint to task space geometric Jacobian
+  Matrix6Xd jacobian_dt_;
 
   // Task space variables
-  Vector6d actual_pose_;
+  Vector6d pose_;
   Vector6d twist_;
-  Vector6d twist_last_;
-  Vector6d twist_last2_;
-  Vector6d actual_accel_;
+  Vector6d accel_;
   Vector6d desired_twist_;
   Vector6d desired_accel_;  // Desired end effector twist derivative
   Eigen::Quaterniond desired_quaternion_;
@@ -245,6 +246,7 @@ protected:
   Vector6d pose_deviation_;    // End effector pose deviation
   Vector6d twist_deviation_;   // End effector twist deviation
   Vector6d estimated_wrench_;  // Interaction wrench estimation
+  Vector6d wrench_last_;       // Last wrench estimation
 
   // Joint space state vectors
   VectorXd robot_q_;         // robot joint positions

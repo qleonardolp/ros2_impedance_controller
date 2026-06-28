@@ -104,7 +104,7 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
   jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
   jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
 
-  accel_deviation_.noalias() = actual_accel_;
+  accel_deviation_.noalias() = accel_;
 
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;

@@ -2,6 +2,11 @@
 Changelog for package ros2_impedance_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.1.0 (2026-07-15)
+------------------
+* Refact taskspace acceleration (``accel_``);
+* Add ``NonlinearCartesianController`` with sigmoid-like spring saturation;
+
 2.0.0 (2026-05-31)
 ------------------
 * Refact controller with a base class;
