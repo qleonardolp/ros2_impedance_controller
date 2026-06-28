@@ -73,17 +73,16 @@ void BasicCartesianController::custom_configuration()
 
   // Initialize dynamic Eigen members
   tau_desired_.resize(get_dof());
-  accel_feedforward_.resize(get_dof());
-  jacobian_pinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
-  jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
-  jsim_jpinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
 }
 
 void BasicCartesianController::custom_activation()
 {
   // Dynamic size members (joint space dim)
-  accel_feedforward_.setZero();
   tau_desired_.setZero();
+
+  // Fixed size members
+  wrench_input_.setIdentity();
+
   // PH related
   impedance_expected_input_.setZero();
   hamiltonian_filtered_ = 0.0;
@@ -93,20 +92,16 @@ void BasicCartesianController::custom_activation()
 controller_interface::CallbackReturn BasicCartesianController::update_effort_commands()
 {
   update_start_ = steady_clock_->now();
-  jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
-  jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
 
-  accel_deviation_.noalias() = actual_accel_ - desired_accel_;
-
-  jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
-  actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
+  compute_osim();
   desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
+
+  estimate_inertia_diagonal();
 
   impedance_wrench_.noalias() =
     desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
 
-  accel_feedforward_ = jsim_jpinv_ * desired_accel_;
-  tau_desired_.noalias() = accel_feedforward_ - jacobian_.transpose() * impedance_wrench_;
+  tau_desired_.noalias() = -jacobian_.transpose() * impedance_wrench_;
 
   if (params_.gravity_compensation)
   {
@@ -154,9 +149,9 @@ void BasicCartesianController::publish_status()
   status_msg_.data[18] = estimated_wrench_(0);
   status_msg_.data[19] = estimated_wrench_(1);
   status_msg_.data[20] = estimated_wrench_(2);
-  status_msg_.data[21] = estimated_wrench_(3);
-  status_msg_.data[22] = estimated_wrench_(4);
-  status_msg_.data[23] = estimated_wrench_(5);
+  status_msg_.data[21] = osim_diagonal_(0);
+  status_msg_.data[22] = osim_diagonal_(1);
+  status_msg_.data[23] = osim_diagonal_(2);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
 
@@ -174,6 +169,25 @@ void BasicCartesianController::compute_hamiltonian()
     cmd_lpf_alpha_ * hamiltonian_ + (1.0 - cmd_lpf_alpha_) * hamiltonian_filtered_;
   hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / delta_t_;
   hamiltonian_last_ = hamiltonian_filtered_;
+}
+
+void BasicCartesianController::estimate_inertia_diagonal()
+{
+  wrench_input_ = (estimated_wrench_ - impedance_wrench_).asDiagonal() * (2 * delta_t_);
+  twist_delta_.noalias() = twist_ - twist_last2_;
+
+  // Solve X for min ||A*X - B||, where B is the arg of .solve()
+  osim_diagonal_ = wrench_input_.completeOrthogonalDecomposition().solve(twist_delta_);
+}
+
+void BasicCartesianController::compute_osim()
+{
+  pinocchio::cholesky::decompose(robot_model_, *robot_data_.get());
+  pinocchio::cholesky::computeMinv(robot_model_, *robot_data_.get());
+
+  actual_inertia_ = (jacobian_ * robot_data_->Minv * jacobian_.transpose())
+                      .completeOrthogonalDecomposition()
+                      .pseudoInverse();
 }
 
 }  // namespace ros2_impedance_controller

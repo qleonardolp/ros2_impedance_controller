@@ -329,7 +329,9 @@ void ImpedanceControllerBase::estimate_interaction_wrench()
   {
     fint_residual_ -= effort_commands_;
   }
-  estimated_wrench_.noalias() = jacobian_.transpose().colPivHouseholderQr().solve(fint_residual_);
+  // Alt: .fullPivHouseholderQr().solve(-fint_residual_);
+  estimated_wrench_.noalias() =
+    jacobian_.transpose().completeOrthogonalDecomposition().solve(-fint_residual_);
 }
 
 void ImpedanceControllerBase::update_deviation_and_reference()
