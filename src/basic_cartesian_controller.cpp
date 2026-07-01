@@ -81,7 +81,7 @@ void BasicCartesianController::custom_activation()
   tau_desired_.setZero();
 
   // Fixed size members
-  accel_last_.setZero();
+  wrench_last_.setZero();
   accel_delta_.setIdentity();
 
   // PH related
@@ -174,8 +174,8 @@ void BasicCartesianController::compute_hamiltonian()
 
 void BasicCartesianController::estimate_inertia_diagonal()
 {
-  accel_delta_ = (accel_ - accel_last_).asDiagonal();
-  accel_last_ = accel_;
+  accel_delta_ = (accel_ - accel_delayed_).asDiagonal();
+  accel_delayed_ = accel_;
 
   wrench_delta_ = estimated_wrench_ - wrench_last_;
   wrench_last_ = estimated_wrench_;

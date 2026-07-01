@@ -95,8 +95,9 @@ protected:
   VectorXd tau_desired_;
 
   Matrix6d accel_delta_;
-  Vector6d accel_last_;
+  Vector6d accel_delayed_;
   Vector6d wrench_delta_;
+  Vector6d wrench_last_;    // Last wrench estimation
   Vector6d osim_diagonal_;  // OSIM diagonal estimate
 };
 

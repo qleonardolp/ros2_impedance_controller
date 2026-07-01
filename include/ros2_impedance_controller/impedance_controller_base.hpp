@@ -193,8 +193,7 @@ protected:
 
   // Torque low-pass filter alpha for Nyquist frequency.
   double cmd_lpf_alpha_{0.7585469929947761};
-
-  double acc_lpf_alpha_{0.4399008464884426};
+  double lpf_alpha_{0.3858695450950376};  // 1/10
 
   rclcpp::Time clock_time_last_;
   double delta_t_{0};
@@ -246,16 +245,16 @@ protected:
   Vector6d pose_deviation_;    // End effector pose deviation
   Vector6d twist_deviation_;   // End effector twist deviation
   Vector6d estimated_wrench_;  // Interaction wrench estimation
-  Vector6d wrench_last_;       // Last wrench estimation
 
   // Joint space state vectors
-  VectorXd robot_q_;         // robot joint positions
-  VectorXd robot_dq_;        // robot joint velocities
-  VectorXd robot_dq_last_;   // robot joint velocities (k-1)
-  VectorXd robot_dq_last2_;  // robot joint velocities (k-2)
-  VectorXd robot_ddq_;       // robot joint accelerations
-  VectorXd robot_efforts_;   // robot joint efforts (torque or force)
-  VectorXd fint_residual_;   // joint space residual for f_int estimation
+  VectorXd robot_q_;             // robot joint positions
+  VectorXd robot_dq_;            // robot joint velocities
+  VectorXd robot_dq_last_;       // robot joint velocities (k-1)
+  VectorXd robot_dq_last2_;      // robot joint velocities (k-2)
+  VectorXd robot_ddq_;           // robot joint accelerations
+  VectorXd robot_efforts_;       // robot joint efforts (torque or force)
+  VectorXd robot_efforts_last_;  // robot joint efforts (k-1)
+  VectorXd js_residue_;          // joint space residue for f_int estimation
 
   // Controller command vector (joint space)
   VectorXd effort_commands_;

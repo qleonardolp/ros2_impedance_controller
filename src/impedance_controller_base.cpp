@@ -103,8 +103,9 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_configure(
   robot_dq_last_.resize(degrees_of_freedom_);
   robot_dq_last2_.resize(degrees_of_freedom_);
   robot_ddq_.resize(degrees_of_freedom_);
-  fint_residual_.resize(degrees_of_freedom_);
+  js_residue_.resize(degrees_of_freedom_);
   robot_efforts_.resize(degrees_of_freedom_);
+  robot_efforts_last_.resize(degrees_of_freedom_);
   effort_commands_.resize(degrees_of_freedom_);
   jacobian_ = Matrix6Xd::Zero(kCartesianDim, get_dof());
   jacobian_dt_ = Matrix6Xd::Zero(kCartesianDim, get_dof());
@@ -153,6 +154,7 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   jacobian_dt_.setZero();
   effort_commands_.setZero();
   robot_efforts_.setZero();
+  robot_efforts_last_.setZero();
   robot_dq_last_.setZero();
   robot_dq_last2_.setZero();
 
@@ -175,7 +177,6 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   twist_.setZero();
   accel_.setZero();
 
-  wrench_last_.setZero();
   impedance_wrench_.setZero();
   estimated_wrench_.setZero();
 
@@ -305,10 +306,21 @@ bool ImpedanceControllerBase::update_robot()
       robot_efforts_(k) = effort.value();
     }
   }
-  // Joint space accel: central differentiation
-  robot_ddq_ = (robot_dq_ - robot_dq_last2_) / (2 * delta_t_);
-  robot_dq_last2_ = robot_dq_last_;  // k-2 <- k-1
-  robot_dq_last_ = robot_dq_;        // k-1 <- k
+  // Filtering
+  if (!robot_efforts_.hasNaN())
+  {
+    robot_efforts_ = lpf_alpha_ * robot_efforts_ + (1.0 - lpf_alpha_) * robot_efforts_last_;
+    robot_efforts_last_ = robot_efforts_;
+  }
+
+  if (!robot_dq_.hasNaN())
+  {
+    robot_dq_ = lpf_alpha_ * robot_dq_ + (1.0 - lpf_alpha_) * robot_dq_last_;
+    // Joint space accel: central differentiation
+    robot_ddq_ = (robot_dq_ - robot_dq_last2_) / (2 * delta_t_);
+    robot_dq_last2_ = robot_dq_last_;  // k-2 <- k-1
+    robot_dq_last_ = robot_dq_;        // k-1 <- k
+  }
 
   // Update pinocchio model data
   pinocchio::computeAllTerms(robot_model_, *robot_data_.get(), robot_q_, robot_dq_);
@@ -338,19 +350,20 @@ bool ImpedanceControllerBase::update_robot()
 
 void ImpedanceControllerBase::estimate_interaction_wrench()
 {
-  fint_residual_.noalias() = robot_data_->nle;  // + robot_data_->M * robot_ddq_;
+  js_residue_.noalias() = robot_data_->nle;  // + robot_data_->M * robot_ddq_;
 
   if (has_effort_states_)
   {
-    fint_residual_ -= robot_efforts_;
+    js_residue_ -= robot_efforts_;
   }
   else
   {
-    fint_residual_ -= effort_commands_;
+    js_residue_ -= effort_commands_;
   }
-  // Alt: .fullPivHouseholderQr().solve(-fint_residual_);
+
+  // Alt: .fullPivHouseholderQr().solve(-js_residue_);
   estimated_wrench_.noalias() =
-    jacobian_.transpose().completeOrthogonalDecomposition().solve(-fint_residual_);
+    jacobian_.transpose().completeOrthogonalDecomposition().solve(-js_residue_);
 }
 
 void ImpedanceControllerBase::update_deviation_and_reference()
