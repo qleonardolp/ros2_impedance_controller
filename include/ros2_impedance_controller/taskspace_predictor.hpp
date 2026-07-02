@@ -15,6 +15,7 @@
 #ifndef ROS2_IMPEDANCE_CONTROLLER__TASKSPACE_PREDICTOR_HPP_
 #define ROS2_IMPEDANCE_CONTROLLER__TASKSPACE_PREDICTOR_HPP_
 
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
