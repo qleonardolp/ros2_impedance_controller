@@ -74,8 +74,8 @@ void BasicCartesianController::custom_configuration()
   // Initialize dynamic Eigen members
   tau_desired_.resize(get_dof());
 
-  state_record_ = std::make_shared<SlidingWindow>(kRLSWindow + 2, pose_.size());
-  desired_record_ = std::make_shared<SlidingWindow>(kRLSWindow + 2, desired_position_.size());
+  state_record_ = std::make_shared<SlidingWindow>(3, pose_.size());
+  desired_record_ = std::make_shared<SlidingWindow>(3, desired_position_.size());
 }
 
 void BasicCartesianController::custom_activation()
@@ -84,9 +84,11 @@ void BasicCartesianController::custom_activation()
   tau_desired_.setZero();
 
   // Fixed size members
-  rls_theta_.setZero();
-  rls_gain_den_ = RLSDenominator::Identity();
-  rls_cov_ = 100 * Eigen::Matrix2d::Identity();
+
+  // RLS initialization
+  rls_theta_(0) = desired_damping_.diagonal()(2);    // d/m
+  rls_theta_(1) = desired_stiffness_.diagonal()(2);  // k/m
+  rls_cov_ = 10 * Eigen::Matrix2d::Identity();
 
   // PH related
   impedance_expected_input_.setZero();
@@ -153,10 +155,10 @@ void BasicCartesianController::publish_status()
 
   status_msg_.data[18] = estimated_wrench_(0);
   status_msg_.data[19] = estimated_wrench_(1);
-  status_msg_.data[20] = estimated_wrench_(2);
-  status_msg_.data[21] = desired_damping_.diagonal()(2) / rls_theta_(0);
-  status_msg_.data[22] = desired_stiffness_.diagonal()(2) / rls_theta_(1);
-  status_msg_.data[23] = rls_phi_(1, 0);
+  status_msg_.data[20] = rls_phi_(0);
+  status_msg_.data[21] = rls_phi_(1);
+  status_msg_.data[22] = desired_damping_.diagonal()(2) / rls_theta_(0);
+  status_msg_.data[23] = desired_stiffness_.diagonal()(2) / rls_theta_(1);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
   status_rt_publisher_->try_publish(status_msg_);
@@ -175,31 +177,36 @@ void BasicCartesianController::compute_hamiltonian()
   hamiltonian_last_ = hamiltonian_filtered_;
 }
 
-void BasicCartesianController::rls_identification()
+int BasicCartesianController::rls_identification()
 {
   state_record_->push(pose_);
   desired_record_->push(desired_position_);
-
   rls_buffer_ = state_record_->get_buffer().col(2);
+
+  // Check buffers integrity
+  if (rls_buffer_.hasNaN() || desired_record_->get_buffer().hasNaN())
+  {
+    return 1;
+  }
   // 2nd order derivative
-  rls_y_ = (rls_buffer_.head<kRLSWindow>() - 2 * rls_buffer_.segment<kRLSWindow>(1) +
-            rls_buffer_.tail<kRLSWindow>()) /
-           (delta_t_ * delta_t_);
-  // 1st order derivative
-  rls_phi_.row(0) =
-    -(rls_buffer_.segment<kRLSWindow>(1) - rls_buffer_.tail<kRLSWindow>()) / delta_t_;
-  rls_phi_.row(1) =
-    desired_record_->get_buffer().col(2).tail<kRLSWindow>() - rls_buffer_.tail<kRLSWindow>();
+  rls_y_ = (rls_buffer_(0) - 2 * rls_buffer_(1) + rls_buffer_(2)) / (delta_t_ * delta_t_);
+  // Update phi
+  rls_phi_(0) = -(rls_buffer_(1) - rls_buffer_(2)) / delta_t_;  // 1st order derivative
+  rls_phi_(1) = desired_record_->get_buffer().col(2)(2) - rls_buffer_(2);
 
   // Update gain
-  rls_gain_den_ =
-    RLSDenominator::Identity() * rls_lambda_ + rls_phi_.transpose() * rls_cov_ * rls_phi_;
-  rls_gain_.noalias() = rls_cov_ * rls_phi_ * rls_gain_den_.fullPivHouseholderQr().inverse();
+  rls_gain_den_ = rls_lambda_ + rls_phi_.transpose() * rls_cov_ * rls_phi_;
+  rls_gain_.noalias() = rls_cov_ * rls_phi_ * (1.0 / rls_gain_den_);
   // Update covariance
   rls_cov_ =
     (Eigen::Matrix2d::Identity() - rls_gain_ * rls_phi_.transpose()) * rls_cov_ / rls_lambda_;
-  // Update params
-  rls_theta_ = rls_theta_ + rls_gain_ * (rls_y_ - rls_phi_.transpose() * rls_theta_);
+  // Update params: tht_n = tht_{n-1} + K(n)*e(n)
+  rls_error_ = rls_y_ - rls_phi_.transpose() * rls_theta_;
+  rls_theta_ = rls_theta_ + rls_gain_ * rls_error_;
+  // Adaptive forgetting factor
+  rls_error2_ = rls_error_ * rls_error_;
+  // rls_lambda_ = std::clamp(1.0 / std::sqrt(1.0 + 0.333 * rls_error2_), 0.95, 0.99999);
+  return 0;
 }
 
 void BasicCartesianController::compute_osim()

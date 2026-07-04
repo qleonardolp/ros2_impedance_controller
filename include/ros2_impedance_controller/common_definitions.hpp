@@ -46,8 +46,11 @@ public:
     {
       return 1;
     }
-
-    buffer_.bottomRows(window_size_ - 1) = buffer_.topRows(window_size_ - 1);  //
+    // Roll rows
+    for (size_t n = window_size_ - 1; n > 0; --n)
+    {
+      buffer_.row(n) = buffer_.row(n - 1);
+    }
     buffer_.row(0) = entry;
     return 0;
   }

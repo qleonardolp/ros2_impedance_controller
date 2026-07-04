@@ -15,6 +15,7 @@
 #ifndef ROS2_IMPEDANCE_CONTROLLER__BASIC_CARTESIAN_CONTROLLER_HPP_
 #define ROS2_IMPEDANCE_CONTROLLER__BASIC_CARTESIAN_CONTROLLER_HPP_
 
+#include <algorithm>
 #include <memory>
 #include "pinocchio/algorithm/cholesky.hpp"
 #include "ros2_impedance_controller/impedance_controller_base.hpp"
@@ -23,10 +24,6 @@
 
 namespace ros2_impedance_controller
 {
-const size_t kRLSWindow = 40;  // RLS time window
-
-typedef Eigen::Matrix<double, kRLSWindow, kRLSWindow> RLSDenominator;
-
 /**
  * \brief Basic Cartesian impedance controller with only
  * gravity compensation and PD impedance.
@@ -74,7 +71,7 @@ protected:
    *
    * Estimate X(s)/X_d(s) transfer function.
    */
-  void rls_identification();
+  int rls_identification();
 
   std::shared_ptr<::cartesian_controller::ParamListener> param_listener_;
   ::cartesian_controller::Params params_;
@@ -103,22 +100,26 @@ protected:
   /* RLS identification */
   std::shared_ptr<SlidingWindow> state_record_;
   std::shared_ptr<SlidingWindow> desired_record_;
+  // state buffer
+  Eigen::Vector3d rls_buffer_;  // must match the SlidingWindow size
   // Estimated parameters
   Eigen::Vector2d rls_theta_;
+  // A priori estimation error
+  double rls_error_;
   // Regression reference
-  Eigen::Vector<double, kRLSWindow> rls_y_;
+  double rls_y_;
   // Regression vectors
-  Eigen::Matrix<double, 2, kRLSWindow> rls_phi_;
+  Eigen::Vector2d rls_phi_;
   // Covariance matrix (P)
   Eigen::Matrix2d rls_cov_;
   // Gain (L)
-  Eigen::Matrix<double, 2, kRLSWindow> rls_gain_;
-  // Gain denominator
-  RLSDenominator rls_gain_den_;
+  Eigen::Vector2d rls_gain_;
   // Forgetting factor
-  double rls_lambda_{0.986};
-  // state buffer
-  Eigen::Vector<double, kRLSWindow + 2> rls_buffer_;
+  double rls_lambda_{0.9997};
+  // Gain denominator
+  double rls_gain_den_;
+  // Error squared
+  double rls_error2_;
 };
 
 }  // namespace ros2_impedance_controller
