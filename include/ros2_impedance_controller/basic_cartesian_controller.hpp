@@ -115,11 +115,13 @@ protected:
   // Gain (L)
   Eigen::Vector2d rls_gain_;
   // Forgetting factor
-  double rls_lambda_{0.9997};
+  double rls_lambda_{0.998};
   // Gain denominator
   double rls_gain_den_;
   // Error squared
   double rls_error2_;
+  // Checks whether its in steady state
+  bool rls_is_steady_{false};
 };
 
 }  // namespace ros2_impedance_controller

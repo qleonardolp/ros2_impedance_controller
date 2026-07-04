@@ -155,8 +155,8 @@ void BasicCartesianController::publish_status()
 
   status_msg_.data[18] = estimated_wrench_(0);
   status_msg_.data[19] = estimated_wrench_(1);
-  status_msg_.data[20] = rls_phi_(0);
-  status_msg_.data[21] = rls_phi_(1);
+  status_msg_.data[20] = estimated_wrench_(2);
+  status_msg_.data[21] = rls_error_;
   status_msg_.data[22] = desired_damping_.diagonal()(2) / rls_theta_(0);
   status_msg_.data[23] = desired_stiffness_.diagonal()(2) / rls_theta_(1);
 
@@ -184,15 +184,17 @@ int BasicCartesianController::rls_identification()
   rls_buffer_ = state_record_->get_buffer().col(2);
 
   // Check buffers integrity
-  if (rls_buffer_.hasNaN() || desired_record_->get_buffer().hasNaN())
-  {
-    return 1;
-  }
+  if (rls_buffer_.hasNaN() || desired_record_->get_buffer().hasNaN()) return 1;
+
   // 2nd order derivative
   rls_y_ = (rls_buffer_(0) - 2 * rls_buffer_(1) + rls_buffer_(2)) / (delta_t_ * delta_t_);
   // Update phi
   rls_phi_(0) = -(rls_buffer_(1) - rls_buffer_(2)) / delta_t_;  // 1st order derivative
   rls_phi_(1) = desired_record_->get_buffer().col(2)(2) - rls_buffer_(2);
+
+  // Check steady state
+  rls_is_steady_ = rls_phi_.norm() < 1e-3;  // loosely speaking: 1 mm for zero velocity
+  if (rls_is_steady_) return 2;
 
   // Update gain
   rls_gain_den_ = rls_lambda_ + rls_phi_.transpose() * rls_cov_ * rls_phi_;
