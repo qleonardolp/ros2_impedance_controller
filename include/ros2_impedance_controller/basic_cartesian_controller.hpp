@@ -23,6 +23,10 @@
 
 namespace ros2_impedance_controller
 {
+const size_t kRLSWindow = 40;  // RLS time window
+
+typedef Eigen::Matrix<double, kRLSWindow, kRLSWindow> RLSDenominator;
+
 /**
  * \brief Basic Cartesian impedance controller with only
  * gravity compensation and PD impedance.
@@ -66,9 +70,11 @@ protected:
   void compute_osim();
 
   /**
-   * @brief Estimate the operational space inertia matrix diagonal
+   * @brief Recursive Least Squares identification
+   *
+   * Estimate X(s)/X_d(s) transfer function.
    */
-  void estimate_inertia_diagonal();
+  void rls_identification();
 
   std::shared_ptr<::cartesian_controller::ParamListener> param_listener_;
   ::cartesian_controller::Params params_;
@@ -94,11 +100,25 @@ protected:
   // Command terms
   VectorXd tau_desired_;
 
-  Matrix6d accel_delta_;
-  Vector6d accel_delayed_;
-  Vector6d wrench_delta_;
-  Vector6d wrench_last_;    // Last wrench estimation
-  Vector6d osim_diagonal_;  // OSIM diagonal estimate
+  /* RLS identification */
+  std::shared_ptr<SlidingWindow> state_record_;
+  std::shared_ptr<SlidingWindow> desired_record_;
+  // Estimated parameters
+  Eigen::Vector2d rls_theta_;
+  // Regression reference
+  Eigen::Vector<double, kRLSWindow> rls_y_;
+  // Regression vectors
+  Eigen::Matrix<double, 2, kRLSWindow> rls_phi_;
+  // Covariance matrix (P)
+  Eigen::Matrix2d rls_cov_;
+  // Gain (L)
+  Eigen::Matrix<double, 2, kRLSWindow> rls_gain_;
+  // Gain denominator
+  RLSDenominator rls_gain_den_;
+  // Forgetting factor
+  double rls_lambda_{0.986};
+  // state buffer
+  Eigen::Vector<double, kRLSWindow + 2> rls_buffer_;
 };
 
 }  // namespace ros2_impedance_controller

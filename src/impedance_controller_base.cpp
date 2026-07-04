@@ -60,6 +60,10 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_configure(
     return controller_interface::CallbackReturn::ERROR;
   }
 
+  // Retrieve ros2_control update_rate
+  delta_t_ = 1.0 / static_cast<double>(get_node()->get_parameter("update_rate").as_int());
+  RCLCPP_INFO(get_node()->get_logger(), "Controller dt = %.4f", delta_t_);
+
   auto qos_lowlatency = rclcpp::QoS(1);
   qos_lowlatency.best_effort().durability_volatile();
   qos_lowlatency.liveliness(RMW_QOS_POLICY_LIVELINESS_AUTOMATIC);
@@ -240,7 +244,6 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_deactivate(
 controller_interface::return_type ImpedanceControllerBase::update(
   const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
 {
-  delta_t_ = (time - clock_time_last_).seconds();
   // Read state interfaces and update robot
   if (!update_robot())
   {

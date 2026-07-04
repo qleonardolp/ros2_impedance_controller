@@ -73,6 +73,9 @@ void BasicCartesianController::custom_configuration()
 
   // Initialize dynamic Eigen members
   tau_desired_.resize(get_dof());
+
+  state_record_ = std::make_shared<SlidingWindow>(kRLSWindow + 2, pose_.size());
+  desired_record_ = std::make_shared<SlidingWindow>(kRLSWindow + 2, desired_position_.size());
 }
 
 void BasicCartesianController::custom_activation()
@@ -81,8 +84,9 @@ void BasicCartesianController::custom_activation()
   tau_desired_.setZero();
 
   // Fixed size members
-  wrench_last_.setZero();
-  accel_delta_.setIdentity();
+  rls_theta_.setZero();
+  rls_gain_den_ = RLSDenominator::Identity();
+  rls_cov_ = 100 * Eigen::Matrix2d::Identity();
 
   // PH related
   impedance_expected_input_.setZero();
@@ -97,7 +101,7 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   compute_osim();
   desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
 
-  estimate_inertia_diagonal();
+  rls_identification();
 
   impedance_wrench_.noalias() =
     desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
@@ -150,12 +154,11 @@ void BasicCartesianController::publish_status()
   status_msg_.data[18] = estimated_wrench_(0);
   status_msg_.data[19] = estimated_wrench_(1);
   status_msg_.data[20] = estimated_wrench_(2);
-  status_msg_.data[21] = osim_diagonal_(0);
-  status_msg_.data[22] = osim_diagonal_(1);
-  status_msg_.data[23] = osim_diagonal_(2);
+  status_msg_.data[21] = desired_damping_.diagonal()(2) / rls_theta_(0);
+  status_msg_.data[22] = desired_stiffness_.diagonal()(2) / rls_theta_(1);
+  status_msg_.data[23] = rls_phi_(1, 0);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
-
   status_rt_publisher_->try_publish(status_msg_);
 }
 
@@ -172,16 +175,31 @@ void BasicCartesianController::compute_hamiltonian()
   hamiltonian_last_ = hamiltonian_filtered_;
 }
 
-void BasicCartesianController::estimate_inertia_diagonal()
+void BasicCartesianController::rls_identification()
 {
-  accel_delta_ = (accel_ - accel_delayed_).asDiagonal();
-  accel_delayed_ = accel_;
+  state_record_->push(pose_);
+  desired_record_->push(desired_position_);
 
-  wrench_delta_ = estimated_wrench_ - wrench_last_;
-  wrench_last_ = estimated_wrench_;
+  rls_buffer_ = state_record_->get_buffer().col(2);
+  // 2nd order derivative
+  rls_y_ = (rls_buffer_.head<kRLSWindow>() - 2 * rls_buffer_.segment<kRLSWindow>(1) +
+            rls_buffer_.tail<kRLSWindow>()) /
+           (delta_t_ * delta_t_);
+  // 1st order derivative
+  rls_phi_.row(0) =
+    -(rls_buffer_.segment<kRLSWindow>(1) - rls_buffer_.tail<kRLSWindow>()) / delta_t_;
+  rls_phi_.row(1) =
+    desired_record_->get_buffer().col(2).tail<kRLSWindow>() - rls_buffer_.tail<kRLSWindow>();
 
-  // Solve X for min ||A*X - B||, where B is the arg of .solve()
-  osim_diagonal_ = accel_delta_.completeOrthogonalDecomposition().solve(wrench_delta_);
+  // Update gain
+  rls_gain_den_ =
+    RLSDenominator::Identity() * rls_lambda_ + rls_phi_.transpose() * rls_cov_ * rls_phi_;
+  rls_gain_.noalias() = rls_cov_ * rls_phi_ * rls_gain_den_.fullPivHouseholderQr().inverse();
+  // Update covariance
+  rls_cov_ =
+    (Eigen::Matrix2d::Identity() - rls_gain_ * rls_phi_.transpose()) * rls_cov_ / rls_lambda_;
+  // Update params
+  rls_theta_ = rls_theta_ + rls_gain_ * (rls_y_ - rls_phi_.transpose() * rls_theta_);
 }
 
 void BasicCartesianController::compute_osim()
