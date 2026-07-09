@@ -74,8 +74,8 @@ void BasicCartesianController::custom_configuration()
   // Initialize dynamic Eigen members
   tau_desired_.resize(get_dof());
 
-  state_record_ = std::make_shared<SlidingWindow>(3, pose_.size());
-  desired_record_ = std::make_shared<SlidingWindow>(3, desired_position_.size());
+  zspace_window_ = params_.zspace_window;
+  zspace_points_ = std::make_shared<SlidingWindow>(zspace_window_, 3);
 }
 
 void BasicCartesianController::custom_activation()
@@ -89,6 +89,10 @@ void BasicCartesianController::custom_activation()
   rls_theta_(0) = desired_damping_.diagonal()(2);    // d/m
   rls_theta_(1) = desired_stiffness_.diagonal()(2);  // k/m
   rls_cov_ = 10 * Eigen::Matrix2d::Identity();
+
+  zspace_normal_last_ << 1.0, 0.0, 0.0;
+  zspace_normal_.setOnes();
+  zspace_counter_ = 0;
 
   // PH related
   impedance_expected_input_.setZero();
@@ -104,6 +108,7 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
 
   rls_identification();
+  zsapce_identification();
 
   impedance_wrench_.noalias() =
     desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
@@ -153,10 +158,10 @@ void BasicCartesianController::publish_status()
   status_msg_.data[16] = twist_deviation_(4);
   status_msg_.data[17] = twist_deviation_(5);
 
-  status_msg_.data[18] = estimated_wrench_(0);
-  status_msg_.data[19] = estimated_wrench_(1);
-  status_msg_.data[20] = estimated_wrench_(2);
-  status_msg_.data[21] = rls_error_;
+  status_msg_.data[18] = zspace_normal_last_(0);
+  status_msg_.data[19] = zspace_normal_last_(1);
+  status_msg_.data[20] = zspace_normal_last_(2);
+  status_msg_.data[21] = zspace_is_steady_;
   status_msg_.data[22] = desired_damping_.diagonal()(2) / rls_theta_(0);
   status_msg_.data[23] = desired_stiffness_.diagonal()(2) / rls_theta_(1);
 
@@ -179,18 +184,13 @@ void BasicCartesianController::compute_hamiltonian()
 
 int BasicCartesianController::rls_identification()
 {
-  state_record_->push(pose_);
-  desired_record_->push(desired_position_);
-  rls_buffer_ = state_record_->get_buffer().col(2);
+  // Check data integrity
+  if (pose_deviation_.hasNaN() || twist_.hasNaN() || accel_.hasNaN()) return 1;
 
-  // Check buffers integrity
-  if (rls_buffer_.hasNaN() || desired_record_->get_buffer().hasNaN()) return 1;
-
-  // 2nd order derivative
-  rls_y_ = (rls_buffer_(0) - 2 * rls_buffer_(1) + rls_buffer_(2)) / (delta_t_ * delta_t_);
-  // Update phi
-  rls_phi_(0) = -(rls_buffer_(1) - rls_buffer_(2)) / delta_t_;  // 1st order derivative
-  rls_phi_(1) = desired_record_->get_buffer().col(2)(2) - rls_buffer_(2);
+  // Update phi (Running for 'z' axis only)
+  rls_phi_(0) = -twist_(2);           // dx (*d/m)
+  rls_phi_(1) = -pose_deviation_(2);  // x_d - x (*k/m)
+  rls_y_ = accel_(2);
 
   // Check steady state
   rls_is_steady_ = rls_phi_.norm() < 1e-3;  // loosely speaking: 1 mm for zero velocity
@@ -205,9 +205,41 @@ int BasicCartesianController::rls_identification()
   // Update params: tht_n = tht_{n-1} + K(n)*e(n)
   rls_error_ = rls_y_ - rls_phi_.transpose() * rls_theta_;
   rls_theta_ = rls_theta_ + rls_gain_ * rls_error_;
-  // Adaptive forgetting factor
   rls_error2_ = rls_error_ * rls_error_;
-  // rls_lambda_ = std::clamp(1.0 / std::sqrt(1.0 + 0.333 * rls_error2_), 0.95, 0.99999);
+  return 0;
+}
+
+int BasicCartesianController::zsapce_identification()
+{
+  // Check data integrity
+  if (pose_deviation_.hasNaN() || twist_.hasNaN() || accel_.hasNaN()) return 1;
+
+  zspace_new_ << pose_deviation_(2), twist_(2), accel_(2);
+  // Check steady state
+  zspace_is_steady_ = zspace_new_.head<2>().norm() < 1e-3;  // accel is noisy so we neglect it
+  if (zspace_is_steady_) return 2;
+
+  zspace_points_->push(zspace_new_);
+
+  zspace_counter_++;
+  if (zspace_counter_ % zspace_window_ == 0)
+  {
+    zspace_mean_ = zspace_points_->get_buffer().colwise().mean();  // window mean
+    for (size_t i = 0; i < zspace_window_; i++)
+    {
+      // Reusing `zspace_new_` as the centered point auxiliary variable
+      zspace_new_.noalias() = zspace_points_->get_buffer().row(i);
+      zspace_new_ -= zspace_mean_;
+      zspace_M_ += zspace_new_ * zspace_new_.transpose();
+    }
+    zspace_M_ = zspace_M_ / static_cast<double>(zspace_window_);
+    zspace_Meig_.compute(zspace_M_);
+    // Eigenvector corresponding to the smallest eigenvalue:
+    zspace_normal_ = zspace_Meig_.eigenvectors().col(0);
+    // Constrain negative params (k,d,m):
+    zspace_normal_last_ = (zspace_normal_(0) > 0) ? zspace_normal_ : -zspace_normal_;
+    zspace_counter_ = 0;
+  }
   return 0;
 }
 

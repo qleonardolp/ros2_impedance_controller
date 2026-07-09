@@ -58,3 +58,12 @@ nonlinear_controller:
     default_value: true,
     read_only: true,
   }
+  zspace_window: {
+    type: int,
+    default_value: 16,
+    description: "Impedance space identification time window in number of samples.",
+    read_only: true,
+    validation: {
+      bounds<>: [3, 100]
+    }
+  }

@@ -73,6 +73,11 @@ protected:
    */
   int rls_identification();
 
+  /**
+   * @brief Estimate the Z-space surface normal
+   */
+  int zsapce_identification();
+
   std::shared_ptr<::cartesian_controller::ParamListener> param_listener_;
   ::cartesian_controller::Params params_;
 
@@ -97,23 +102,36 @@ protected:
   // Command terms
   VectorXd tau_desired_;
 
+  /**
+   * Impedance space planar identification (ISPI)
+   * Least square plane fitting from
+   * "Estimating Surface Normals in Noisy Point Cloud Data"
+   * [https://dl.acm.org/doi/pdf/10.1145/777792.777840]
+   */
+  size_t zspace_window_;
+  size_t zspace_counter_;
+  std::shared_ptr<SlidingWindow> zspace_points_;
+  Eigen::Vector3d zspace_new_;
+  Eigen::Vector3d zspace_mean_;
+  Eigen::Matrix3d zspace_M_;  // total least square fitting (hyper)plane
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> zspace_Meig_;  // M EigenSolver
+  Eigen::Vector3d zspace_normal_last_;
+  Eigen::Vector3d zspace_normal_;
+  bool zspace_is_steady_{false};
+
   /* RLS identification */
-  std::shared_ptr<SlidingWindow> state_record_;
-  std::shared_ptr<SlidingWindow> desired_record_;
-  // state buffer
-  Eigen::Vector3d rls_buffer_;  // must match the SlidingWindow size
   // Estimated parameters
   Eigen::Vector2d rls_theta_;
-  // A priori estimation error
-  double rls_error_;
-  // Regression reference
-  double rls_y_;
   // Regression vectors
   Eigen::Vector2d rls_phi_;
   // Covariance matrix (P)
   Eigen::Matrix2d rls_cov_;
   // Gain (L)
   Eigen::Vector2d rls_gain_;
+  // A priori estimation error
+  double rls_error_;
+  // Regression reference
+  double rls_y_;
   // Forgetting factor
   double rls_lambda_{0.998};
   // Gain denominator
