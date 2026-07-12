@@ -236,8 +236,11 @@ int BasicCartesianController::zsapce_identification()
     zspace_Meig_.compute(zspace_M_);
     // Eigenvector corresponding to the smallest eigenvalue:
     zspace_normal_ = zspace_Meig_.eigenvectors().col(0);
-    // Constrain negative params (k,d,m):
-    zspace_normal_last_ = (zspace_normal_(0) > 0) ? zspace_normal_ : -zspace_normal_;
+    // Neglect negative params (k,d,m):
+    if (zspace_normal_(0) > 0 && zspace_normal_(1) > 0 && zspace_normal_(2) > 0)
+    {
+      zspace_normal_last_ = lpf_alpha_ * zspace_normal_ + (1.0 - lpf_alpha_) * zspace_normal_last_;
+    }
     zspace_counter_ = 0;
   }
   return 0;
