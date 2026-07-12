@@ -135,8 +135,9 @@ public:
         zspace_normal_last_ = kLPFAlpha * zspace_normal_ + (1.0 - kLPFAlpha) * zspace_normal_last_;
       }
       zspace_counter_ = 0;
+      return 0;
     }
-    return 0;
+    return 3;
   }
 
   void reset_estimation()

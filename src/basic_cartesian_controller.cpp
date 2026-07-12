@@ -96,8 +96,8 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
 {
   update_start_ = steady_clock_->now();
 
-  rls_identification();
-  zspace_id_->update(pose_deviation_, twist_, accel_, 2);  // z-axis
+  // rls_identification();
+  zspace_id_->update(pose_deviation_, twist_deviation_, accel_, 0);  // x-axis
 
   impedance_wrench_.noalias() =
     desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
@@ -130,7 +130,7 @@ void BasicCartesianController::publish_status()
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative
-  status_msg_.data[4] = actual_inertia_(2, 2);  // trying to visualize m_zz
+  status_msg_.data[4] = actual_inertia_(0, 0);
   // Impedance I/O power
   status_msg_.data[5] = -twist_deviation_.transpose() * impedance_wrench_;
 
@@ -149,12 +149,12 @@ void BasicCartesianController::publish_status()
   status_msg_.data[16] = twist_deviation_(4);
   status_msg_.data[17] = twist_deviation_(5);
 
-  status_msg_.data[18] = zspace_id_->get_normal()(0);
-  status_msg_.data[19] = zspace_id_->get_normal()(1);
-  status_msg_.data[20] = zspace_id_->get_normal()(2);
-  status_msg_.data[21] = 0;
-  status_msg_.data[22] = desired_damping_.diagonal()(2) / rls_theta_(0);
-  status_msg_.data[23] = desired_stiffness_.diagonal()(2) / rls_theta_(1);
+  status_msg_.data[18] = accel_(0);
+  status_msg_.data[19] = accel_(1);
+  status_msg_.data[20] = accel_(2);
+  status_msg_.data[21] = zspace_id_->get_normal()(0);
+  status_msg_.data[22] = zspace_id_->get_normal()(1);
+  status_msg_.data[23] = zspace_id_->get_normal()(2);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
   status_rt_publisher_->try_publish(status_msg_);

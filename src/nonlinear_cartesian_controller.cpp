@@ -107,8 +107,6 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
   update_stiffness();
   // update_damping();
 
-  desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
-
   impedance_wrench_.noalias() =
     desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
   tau_desired_.noalias() = -jacobian_.transpose() * impedance_wrench_;
@@ -120,8 +118,8 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
 
   effort_commands_ = kCmdAlpha * tau_desired_ + (1.0 - kCmdAlpha) * effort_commands_;
 
+  desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
   compute_hamiltonian();
-
   update_end_ = steady_clock_->now();
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -137,7 +135,7 @@ void NonlinearCartesianController::publish_status()
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative
-  status_msg_.data[4] = actual_inertia_(0, 0);  // trying to visualize m_xx
+  status_msg_.data[4] = actual_inertia_(0, 0);
   // Impedance I/O power
   status_msg_.data[5] = -twist_deviation_.transpose() * impedance_wrench_;
 
@@ -145,9 +143,9 @@ void NonlinearCartesianController::publish_status()
   status_msg_.data[6] = pose_deviation_(0);
   status_msg_.data[7] = pose_deviation_(1);
   status_msg_.data[8] = pose_deviation_(2);
-  status_msg_.data[9] = pose_deviation_(3);
-  status_msg_.data[10] = pose_deviation_(4);
-  status_msg_.data[11] = pose_deviation_(5);
+  status_msg_.data[9] = desired_stiffness_.diagonal()(0);
+  status_msg_.data[10] = desired_stiffness_.diagonal()(1);
+  status_msg_.data[11] = desired_stiffness_.diagonal()(2);
 
   status_msg_.data[12] = twist_deviation_(0);
   status_msg_.data[13] = twist_deviation_(1);
@@ -156,15 +154,14 @@ void NonlinearCartesianController::publish_status()
   status_msg_.data[16] = twist_deviation_(4);
   status_msg_.data[17] = twist_deviation_(5);
 
-  status_msg_.data[18] = zspace_id_->get_normal()(0);
-  status_msg_.data[19] = zspace_id_->get_normal()(1);
-  status_msg_.data[20] = zspace_id_->get_normal()(2);
-  status_msg_.data[21] = desired_stiffness_.diagonal()(0);
-  status_msg_.data[22] = desired_stiffness_.diagonal()(1);
-  status_msg_.data[23] = desired_stiffness_.diagonal()(2);
+  status_msg_.data[18] = accel_deviation_(0);
+  status_msg_.data[19] = accel_deviation_(1);
+  status_msg_.data[20] = accel_deviation_(2);
+  status_msg_.data[21] = zspace_id_->get_normal()(0);
+  status_msg_.data[22] = zspace_id_->get_normal()(1);
+  status_msg_.data[23] = zspace_id_->get_normal()(2);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
-
   status_rt_publisher_->try_publish(status_msg_);
 }
 
