@@ -107,7 +107,7 @@ void CartesianController::custom_configuration()
           Eigen::Vector3d(wrench->force.x, wrench->force.y, wrench->force.z);
         sensor_wrench_raw.tail<3>() =
           Eigen::Vector3d(wrench->torque.x, wrench->torque.y, wrench->torque.z);
-        sensor_wrench_ = cmd_lpf_alpha_ * sensor_wrench_raw + (1 - cmd_lpf_alpha_) * sensor_wrench_;
+        sensor_wrench_ = kCmdAlpha * sensor_wrench_raw + (1 - kCmdAlpha) * sensor_wrench_;
       });
   }
 
@@ -130,11 +130,6 @@ void CartesianController::custom_activation()
   accel_feedforward_.setZero();
   impedance_torques_.setZero();
   tau_desired_.setZero();
-
-  // PH related
-  impedance_expected_input_.setZero();
-  hamiltonian_filtered_ = 0.0;
-  hamiltonian_last_ = 0.0;
 }
 
 controller_interface::CallbackReturn CartesianController::update_effort_commands()
@@ -168,7 +163,7 @@ controller_interface::CallbackReturn CartesianController::update_effort_commands
   twist_compensation_.noalias() = (robot_data_->C - jsim_jpinv_dj_) * robot_dq_;
   tau_desired_ = accel_feedforward_ + impedance_torques_ + twist_compensation_ + robot_data_->g;
 
-  effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
+  effort_commands_ = kCmdAlpha * tau_desired_ + (1.0 - kCmdAlpha) * effort_commands_;
 
   compute_hamiltonian();
   return controller_interface::CallbackReturn::SUCCESS;
@@ -212,19 +207,6 @@ void CartesianController::publish_status()
   status_msg_.data[23] = estimated_wrench_(5);
 
   status_rt_publisher_->try_publish(status_msg_);
-}
-
-void CartesianController::compute_hamiltonian()
-{
-  // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_.
-  hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
-  hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
-  hamiltonian_ = 0.5 * hamiltonian_;
-
-  hamiltonian_filtered_ =
-    cmd_lpf_alpha_ * hamiltonian_ + (1.0 - cmd_lpf_alpha_) * hamiltonian_filtered_;
-  hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / delta_t_;
-  hamiltonian_last_ = hamiltonian_filtered_;
 }
 
 }  // namespace ros2_impedance_controller

@@ -78,8 +78,6 @@ void MPCIController::custom_configuration()
   status_msg_.data.resize(18, 0.0);
   // Initialize dynamic Eigen members
   tau_desired_.resize(dof_);
-  jacobian_pinv_ = Eigen::MatrixXd::Zero(dof_, kCartesianDim);
-  jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianDim, dof_);
 
   predictor_ = std::make_shared<TaskspacePredictor>(
     timestep_, horizon_, end_effector_link_name_, robot_model_);
@@ -123,10 +121,6 @@ void MPCIController::custom_activation()
 {
   tau_desired_.setZero();
   task_states_.setZero();
-
-  // PH related
-  hamiltonian_filtered_ = 0.0;
-  hamiltonian_last_ = 0.0;
 
   assemble_Ln();  // initially depends on Kd an Dd only
   assemble_Aqp();
@@ -178,7 +172,7 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
     tau_desired_ = u_qp_.head(dof_);  // use the first action (tau_0)
   }
 
-  effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
+  effort_commands_ = kCmdAlpha * tau_desired_ + (1.0 - kCmdAlpha) * effort_commands_;
   /*
   if (debug_)
   {
@@ -189,6 +183,8 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
   }
   */
 
+  compute_osim();
+  desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
   compute_hamiltonian();
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -316,23 +312,6 @@ void MPCIController::publish_status()
   status_msg_.data[17] = static_cast<int>(sqp_ret_);  // check QP status
 
   status_rt_publisher_->try_publish(status_msg_);
-}
-
-void MPCIController::compute_hamiltonian()
-{
-  jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
-  jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
-  desired_inertia_ = jacobianT_pinv_ * robot_data_->M * jacobian_pinv_;
-
-  // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_.
-  hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
-  hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
-  hamiltonian_ = 0.5 * hamiltonian_;
-
-  hamiltonian_filtered_ =
-    cmd_lpf_alpha_ * hamiltonian_ + (1.0 - cmd_lpf_alpha_) * hamiltonian_filtered_;
-  hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / delta_t_;
-  hamiltonian_last_ = hamiltonian_filtered_;
 }
 
 }  // namespace ros2_impedance_controller

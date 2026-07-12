@@ -79,7 +79,8 @@ void NonlinearCartesianController::custom_configuration()
   jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
   jsim_jpinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
   jsim_jpinv_dj_ = Eigen::MatrixXd::Zero(get_dof(), get_dof());
-  jacobian_dt_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
+
+  zspace_id_ = std::make_shared<ZSpaceIdentification>(params_.zspace_window);
 }
 
 void NonlinearCartesianController::custom_activation()
@@ -87,15 +88,7 @@ void NonlinearCartesianController::custom_activation()
   // Dynamic size members (joint space dim)
   tau_desired_.setZero();
 
-  // PH related
-  impedance_expected_input_.setZero();
-  hamiltonian_filtered_ = 0.0;
-  hamiltonian_last_ = 0.0;
-
-  observations_.setOnes();
-  observer_A_.setOnes();
-  vel_series_.setZero();
-  imp_series_.setZero();
+  zspace_id_->reset_estimation();
 }
 
 controller_interface::CallbackReturn NonlinearCartesianController::update_effort_commands()
@@ -109,7 +102,7 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
   jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
   actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
 
-  // observe_inertia_and_disturbance();
+  zspace_id_->update(pose_deviation_, twist_deviation_, accel_deviation_, 0);  // x-axis
 
   update_stiffness();
   // update_damping();
@@ -125,7 +118,7 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
     tau_desired_ += robot_data_->g;
   }
 
-  effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
+  effort_commands_ = kCmdAlpha * tau_desired_ + (1.0 - kCmdAlpha) * effort_commands_;
 
   compute_hamiltonian();
 
@@ -144,9 +137,9 @@ void NonlinearCartesianController::publish_status()
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative
-  status_msg_.data[4] = actual_inertia_(2, 2);  // trying to visualize m_zz
+  status_msg_.data[4] = actual_inertia_(0, 0);  // trying to visualize m_xx
   // Impedance I/O power
-  status_msg_.data[5] = twist_deviation_.transpose() * impedance_wrench_;
+  status_msg_.data[5] = -twist_deviation_.transpose() * impedance_wrench_;
 
   // Impedance space:
   status_msg_.data[6] = pose_deviation_(0);
@@ -163,9 +156,9 @@ void NonlinearCartesianController::publish_status()
   status_msg_.data[16] = twist_deviation_(4);
   status_msg_.data[17] = twist_deviation_(5);
 
-  status_msg_.data[18] = estimated_wrench_(0);
-  status_msg_.data[19] = estimated_wrench_(1);
-  status_msg_.data[20] = estimated_wrench_(2);
+  status_msg_.data[18] = zspace_id_->get_normal()(0);
+  status_msg_.data[19] = zspace_id_->get_normal()(1);
+  status_msg_.data[20] = zspace_id_->get_normal()(2);
   status_msg_.data[21] = desired_stiffness_.diagonal()(0);
   status_msg_.data[22] = desired_stiffness_.diagonal()(1);
   status_msg_.data[23] = desired_stiffness_.diagonal()(2);
@@ -173,19 +166,6 @@ void NonlinearCartesianController::publish_status()
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
 
   status_rt_publisher_->try_publish(status_msg_);
-}
-
-void NonlinearCartesianController::compute_hamiltonian()
-{
-  // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_.
-  hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
-  hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
-  hamiltonian_ = 0.5 * hamiltonian_;
-
-  hamiltonian_filtered_ =
-    cmd_lpf_alpha_ * hamiltonian_ + (1.0 - cmd_lpf_alpha_) * hamiltonian_filtered_;
-  hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / delta_t_;
-  hamiltonian_last_ = hamiltonian_filtered_;
 }
 
 void NonlinearCartesianController::update_stiffness()
@@ -203,11 +183,7 @@ void NonlinearCartesianController::update_damping()
   pinocchio::cholesky::decompose(robot_model_, *robot_data_.get());
   pinocchio::cholesky::computeMinv(robot_model_, *robot_data_.get());
 
-  pinocchio::getFrameJacobianTimeVariation(
-    robot_model_, *robot_data_.get(), end_effector_frame_, pinocchio::LOCAL_WORLD_ALIGNED,
-    jacobian_dt_);
-
-  jsim_jpinv_dj_ = jsim_jpinv_ * jacobian_dt_;
+  jsim_jpinv_dj_ = jsim_jpinv_ * jacobian_dt_;  // Base class updates `jacobian_dt_`
 
   // Partitioning check
   is_dissipative_ = true;
@@ -220,27 +196,6 @@ void NonlinearCartesianController::update_damping()
 
   // Phase space (q,p) divergence:
   divergence_ = -((jsim_jpinv_dj_ + desired_damping_ * jacobian_) * robot_data_->Minv).trace();
-}
-
-void NonlinearCartesianController::observe_inertia_and_disturbance()
-{
-  // roll along 4 samples
-  for (size_t k = 3; k > 0; --k)
-  {
-    vel_series_(k) = vel_series_(k - 1);
-    imp_series_(k) = imp_series_(k - 1);
-  }
-  vel_series_(0) = twist_(0);             // 'x' only
-  imp_series_(0) = impedance_wrench_(0);  // 'x' only
-  // Remember: after that we have
-  // (0) -> k+3
-  // (1) -> k+2
-  // (2) -> k+1
-  // (3) -> k
-  observer_A_.col(0) = vel_series_.tail<3>();
-  observer_A_.col(1) = imp_series_.tail<3>();
-
-  observations_ = observer_A_.colPivHouseholderQr().solve(vel_series_.head<3>());
 }
 
 }  // namespace ros2_impedance_controller

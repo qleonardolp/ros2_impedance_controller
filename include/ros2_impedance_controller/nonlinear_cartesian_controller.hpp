@@ -56,11 +56,6 @@ protected:
   void publish_status() override;
 
   /**
-   * @brief Compute Cartesian impedance Hamiltonian function
-   */
-  void compute_hamiltonian();
-
-  /**
    * @brief Compute and update Cartesian Stiffness
    *
    * This nonlinear sitffness saturates decreasing the effective stiffness
@@ -81,8 +76,6 @@ protected:
    */
   void update_damping();
 
-  void observe_inertia_and_disturbance();
-
   std::shared_ptr<::nonlinear_controller::ParamListener> param_listener_;
   ::nonlinear_controller::Params params_;
 
@@ -91,15 +84,6 @@ protected:
   rclcpp::Time update_start_;
   // `update_effort_commands` end
   rclcpp::Time update_end_;
-
-  /* Port-Hamiltonian variables */
-  // Impedance Hamiltonian function value
-  double hamiltonian_{0};
-  double hamiltonian_last_{0};
-  double hamiltonian_filtered_{0};
-  double hamiltonian_derivative_{0};
-  // Expected impedance input (u)
-  Vector6d impedance_expected_input_;
 
   // End effector task space twist derivative
   Vector6d accel_deviation_;
@@ -116,17 +100,11 @@ protected:
   double divergence_{0.0};
   bool is_dissipative_{false};
 
-  // Inertia and disturbance observer (DMD-inspired)
-  Eigen::Vector4d vel_series_;
-  Eigen::Vector4d imp_series_;
-  Eigen::Vector3d observations_;
-  Eigen::Matrix3d observer_A_;
-  // end of observer
-
   // Command terms
   VectorXd tau_desired_;
 
-  Eigen::MatrixXd jacobian_dt_;
+  std::shared_ptr<ZSpaceIdentification> zspace_id_;
+
   Eigen::MatrixXd jacobian_pinv_;
   Eigen::MatrixXd jacobianT_pinv_;
   Eigen::MatrixXd jsim_jpinv_;

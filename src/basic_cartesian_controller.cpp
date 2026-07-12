@@ -74,8 +74,7 @@ void BasicCartesianController::custom_configuration()
   // Initialize dynamic Eigen members
   tau_desired_.resize(get_dof());
 
-  zspace_window_ = params_.zspace_window;
-  zspace_points_ = std::make_shared<SlidingWindow>(zspace_window_, 3);
+  zspace_id_ = std::make_shared<ZSpaceIdentification>(params_.zspace_window);
 }
 
 void BasicCartesianController::custom_activation()
@@ -90,25 +89,15 @@ void BasicCartesianController::custom_activation()
   rls_theta_(1) = desired_stiffness_.diagonal()(2);  // k/m
   rls_cov_ = 10 * Eigen::Matrix2d::Identity();
 
-  zspace_normal_last_ << 1.0, 0.0, 0.0;
-  zspace_normal_.setOnes();
-  zspace_counter_ = 0;
-
-  // PH related
-  impedance_expected_input_.setZero();
-  hamiltonian_filtered_ = 0.0;
-  hamiltonian_last_ = 0.0;
+  zspace_id_->reset_estimation();
 }
 
 controller_interface::CallbackReturn BasicCartesianController::update_effort_commands()
 {
   update_start_ = steady_clock_->now();
 
-  compute_osim();
-  desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
-
   rls_identification();
-  zsapce_identification();
+  zspace_id_->update(pose_deviation_, twist_, accel_, 2);  // z-axis
 
   impedance_wrench_.noalias() =
     desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
@@ -120,8 +109,10 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
     tau_desired_ += robot_data_->g;
   }
 
-  effort_commands_ = cmd_lpf_alpha_ * tau_desired_ + (1.0 - cmd_lpf_alpha_) * effort_commands_;
+  effort_commands_ = kCmdAlpha * tau_desired_ + (1.0 - kCmdAlpha) * effort_commands_;
 
+  compute_osim();
+  desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
   compute_hamiltonian();
 
   update_end_ = steady_clock_->now();
@@ -158,28 +149,15 @@ void BasicCartesianController::publish_status()
   status_msg_.data[16] = twist_deviation_(4);
   status_msg_.data[17] = twist_deviation_(5);
 
-  status_msg_.data[18] = zspace_normal_last_(0);
-  status_msg_.data[19] = zspace_normal_last_(1);
-  status_msg_.data[20] = zspace_normal_last_(2);
-  status_msg_.data[21] = zspace_is_steady_;
+  status_msg_.data[18] = zspace_id_->get_normal()(0);
+  status_msg_.data[19] = zspace_id_->get_normal()(1);
+  status_msg_.data[20] = zspace_id_->get_normal()(2);
+  status_msg_.data[21] = 0;
   status_msg_.data[22] = desired_damping_.diagonal()(2) / rls_theta_(0);
   status_msg_.data[23] = desired_stiffness_.diagonal()(2) / rls_theta_(1);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
   status_rt_publisher_->try_publish(status_msg_);
-}
-
-void BasicCartesianController::compute_hamiltonian()
-{
-  // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_.
-  hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
-  hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
-  hamiltonian_ = 0.5 * hamiltonian_;
-
-  hamiltonian_filtered_ =
-    cmd_lpf_alpha_ * hamiltonian_ + (1.0 - cmd_lpf_alpha_) * hamiltonian_filtered_;
-  hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / delta_t_;
-  hamiltonian_last_ = hamiltonian_filtered_;
 }
 
 int BasicCartesianController::rls_identification()
@@ -207,53 +185,6 @@ int BasicCartesianController::rls_identification()
   rls_theta_ = rls_theta_ + rls_gain_ * rls_error_;
   rls_error2_ = rls_error_ * rls_error_;
   return 0;
-}
-
-int BasicCartesianController::zsapce_identification()
-{
-  // Check data integrity
-  if (pose_deviation_.hasNaN() || twist_.hasNaN() || accel_.hasNaN()) return 1;
-
-  zspace_new_ << pose_deviation_(2), twist_(2), accel_(2);
-  // Check steady state
-  zspace_is_steady_ = zspace_new_.head<2>().norm() < 1e-3;  // accel is noisy so we neglect it
-  if (zspace_is_steady_) return 2;
-
-  zspace_points_->push(zspace_new_);
-
-  zspace_counter_++;
-  if (zspace_counter_ % zspace_window_ == 0)
-  {
-    zspace_mean_ = zspace_points_->get_buffer().colwise().mean();  // window mean
-    for (size_t i = 0; i < zspace_window_; i++)
-    {
-      // Reusing `zspace_new_` as the centered point auxiliary variable
-      zspace_new_.noalias() = zspace_points_->get_buffer().row(i);
-      zspace_new_ -= zspace_mean_;
-      zspace_M_ += zspace_new_ * zspace_new_.transpose();
-    }
-    zspace_M_ = zspace_M_ / static_cast<double>(zspace_window_);
-    zspace_Meig_.compute(zspace_M_);
-    // Eigenvector corresponding to the smallest eigenvalue:
-    zspace_normal_ = zspace_Meig_.eigenvectors().col(0);
-    // Neglect negative params (k,d,m):
-    if (zspace_normal_(0) > 0 && zspace_normal_(1) > 0 && zspace_normal_(2) > 0)
-    {
-      zspace_normal_last_ = lpf_alpha_ * zspace_normal_ + (1.0 - lpf_alpha_) * zspace_normal_last_;
-    }
-    zspace_counter_ = 0;
-  }
-  return 0;
-}
-
-void BasicCartesianController::compute_osim()
-{
-  pinocchio::cholesky::decompose(robot_model_, *robot_data_.get());
-  pinocchio::cholesky::computeMinv(robot_model_, *robot_data_.get());
-
-  actual_inertia_ = (jacobian_ * robot_data_->Minv * jacobian_.transpose())
-                      .completeOrthogonalDecomposition()
-                      .pseudoInverse();
 }
 
 }  // namespace ros2_impedance_controller

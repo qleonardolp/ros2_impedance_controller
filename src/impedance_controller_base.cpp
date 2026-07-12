@@ -184,6 +184,9 @@ controller_interface::CallbackReturn ImpedanceControllerBase::on_activate(
   impedance_wrench_.setZero();
   estimated_wrench_.setZero();
 
+  hamiltonian_filtered_ = 0.0;
+  hamiltonian_last_ = 0.0;
+
   for (const auto & interface : state_interfaces_)  // LoanedStateInterface from the base class
   {
     const std::string & joint_name = interface.get_prefix_name();
@@ -312,13 +315,13 @@ bool ImpedanceControllerBase::update_robot()
   // Filtering
   if (!robot_efforts_.hasNaN())
   {
-    robot_efforts_ = lpf_alpha_ * robot_efforts_ + (1.0 - lpf_alpha_) * robot_efforts_last_;
+    robot_efforts_ = kLPFAlpha * robot_efforts_ + (1.0 - kLPFAlpha) * robot_efforts_last_;
     robot_efforts_last_ = robot_efforts_;
   }
 
   if (!robot_dq_.hasNaN())
   {
-    robot_dq_ = lpf_alpha_ * robot_dq_ + (1.0 - lpf_alpha_) * robot_dq_last_;
+    robot_dq_ = kLPFAlpha * robot_dq_ + (1.0 - kLPFAlpha) * robot_dq_last_;
     // Joint space accel: central differentiation
     robot_ddq_ = (robot_dq_ - robot_dq_last2_) / (2 * delta_t_);
     robot_dq_last2_ = robot_dq_last_;  // k-2 <- k-1
@@ -430,6 +433,28 @@ void ImpedanceControllerBase::update_deviation_and_reference()
     twist_deviation_.noalias() = twist_;
     desired_accel_.setZero();
   }
+}
+
+void ImpedanceControllerBase::compute_osim()
+{
+  pinocchio::cholesky::decompose(robot_model_, *robot_data_.get());
+  pinocchio::cholesky::computeMinv(robot_model_, *robot_data_.get());
+
+  actual_inertia_ = (jacobian_ * robot_data_->Minv * jacobian_.transpose())
+                      .completeOrthogonalDecomposition()
+                      .pseudoInverse();
+}
+
+void ImpedanceControllerBase::compute_hamiltonian()
+{
+  // When inertia shaping is disabled, desired_inertia_ is the actual_inertia_.
+  hamiltonian_ = twist_deviation_.transpose() * desired_inertia_ * twist_deviation_;
+  hamiltonian_ += pose_deviation_.transpose() * desired_stiffness_ * pose_deviation_;
+  hamiltonian_ = 0.5 * hamiltonian_;
+
+  hamiltonian_filtered_ = kLPFAlpha * hamiltonian_ + (1.0 - kLPFAlpha) * hamiltonian_filtered_;
+  hamiltonian_derivative_ = (hamiltonian_filtered_ - hamiltonian_last_) / delta_t_;
+  hamiltonian_last_ = hamiltonian_filtered_;
 }
 
 void ImpedanceControllerBase::configure_visualization_marker()

@@ -63,11 +63,6 @@ protected:
   void publish_status() override;
 
   /**
-   * @brief Compute Cartesian impedance Hamiltonian function
-   */
-  void compute_hamiltonian();
-
-  /**
    * @brief assemble the `L` horizon `stack`
    */
   void assemble_Ln();
@@ -138,18 +133,8 @@ protected:
   Eigen::Quaterniond quat_desired_;  // x_{d} pose quaternion
   Eigen::Vector3d log3_desired_;     // x_{d} pose quaternion log3 map
 
-  /* Port-Hamiltonian variables */
-  // Impedance Hamiltonian function value
-  double hamiltonian_{0};
-  double hamiltonian_last_{0};
-  double hamiltonian_filtered_{0};
-  double hamiltonian_derivative_{0};
-
   // Command terms
   Eigen::VectorXd tau_desired_;
-
-  Eigen::MatrixXd jacobian_pinv_;
-  Eigen::MatrixXd jacobianT_pinv_;
 
   size_t dof_;
 };

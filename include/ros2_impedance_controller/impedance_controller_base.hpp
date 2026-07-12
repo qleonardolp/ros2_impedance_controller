@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "pinocchio/algorithm/cholesky.hpp"
 #include "pinocchio/algorithm/compute-all-terms.hpp"
 #include "pinocchio/algorithm/crba.hpp"
 #include "pinocchio/algorithm/frames.hpp"  // computeFrameJacobian
@@ -178,6 +179,17 @@ protected:
    */
   void estimate_interaction_wrench();
 
+  /**
+   * @brief Compute Operational Space Inertia Matrix (OSIM).
+   * Matrix updated value is stored in `actual_inertia_`.
+   */
+  void compute_osim();
+
+  /**
+   * @brief Compute Cartesian impedance Hamiltonian function
+   */
+  void compute_hamiltonian();
+
   size_t get_dof();
 
   // Parameter defined members
@@ -191,10 +203,7 @@ protected:
   bool visualize_reference_{false};
   // End of parameter defined members
 
-  // Torque low-pass filter alpha for Nyquist frequency.
-  double cmd_lpf_alpha_{0.7585469929947761};
-  double lpf_alpha_{0.3858695450950376};  // 1/10
-
+  // Timing
   rclcpp::Time clock_time_last_;
   double delta_t_{0};
 
@@ -258,6 +267,13 @@ protected:
 
   // Controller command vector (joint space)
   VectorXd effort_commands_;
+
+  /* Port-Hamiltonian variables */
+  // Impedance Hamiltonian function value
+  double hamiltonian_derivative_;
+  double hamiltonian_filtered_;
+  double hamiltonian_last_;
+  double hamiltonian_;
 
 private:
   // Position state interfaces

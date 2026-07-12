@@ -53,11 +53,6 @@ protected:
    */
   void publish_status() override;
 
-  /**
-   * @brief Compute Cartesian impedance Hamiltonian function
-   */
-  void compute_hamiltonian();
-
   std::shared_ptr<::cartesian_controller::ParamListener> param_listener_;
   ::cartesian_controller::Params params_;
 
@@ -65,17 +60,6 @@ protected:
   rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr int_subscriber_;
 
   bool inertia_shaping_;
-
-  /* Port-Hamiltonian variables */
-  // Impedance power
-  double impedance_power_{0};
-  // Impedance Hamiltonian function value
-  double hamiltonian_{0};
-  double hamiltonian_last_{0};
-  double hamiltonian_filtered_{0};
-  double hamiltonian_derivative_{0};
-  // Expected impedance input (u)
-  Vector6d impedance_expected_input_;
 
   // Interaction wrench [forces, torques].T
   Vector6d sensor_wrench_;
