@@ -34,20 +34,12 @@ mpcic_controller:
     default_value: [],
     description: "Cartesian damping gains [N.s/m, N.s/m, N.s/m, Nm.s/rad, Nm.s/rad, Nm.s/rad]",
   }
-  timestep: {
-    type: double,
-    default_value: 0.001,
-    description: "MPC timestep, in seconds. Should match the controller_manager `update_rate`",
-    validation: {
-      gt<>: [0.0]
-    }
-  }
   horizon: {
     type: int,
     default_value: 5,
-    description: "MPC prediction horizon in time steps.",
+    description: "MPC prediction horizon in # of time steps.",
     validation: {
-      bounds<>: [1, 150]
+      bounds<>: [1, 100]
     }
   }
   torque_max: {

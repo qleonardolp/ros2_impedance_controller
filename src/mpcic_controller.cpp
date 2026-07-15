@@ -51,8 +51,6 @@ controller_interface::CallbackReturn MPCIController::read_parameters()
   has_effort_states_ = params_.has_effort_states;
 
   // MPC specific:
-  timestep_ = params_.timestep;
-  cputime_ = timestep_ * 0.5;  // 50% margin
   horizon_ = static_cast<uint8_t>(params_.horizon);
 
   if (params_.stiffness.empty())
@@ -79,8 +77,10 @@ void MPCIController::custom_configuration()
   // Initialize dynamic Eigen members
   tau_desired_.resize(dof_);
 
-  predictor_ = std::make_shared<TaskspacePredictor>(
-    timestep_, horizon_, end_effector_link_name_, robot_model_);
+  cputime_ = delta_t_ * 0.5;  // timestep 50% margin
+
+  predictor_ =
+    std::make_shared<TaskspacePredictor>(delta_t_, horizon_, end_effector_link_name_, robot_model_);
 
   action_dim_ = static_cast<int>(dof_) * horizon_;
   constraints_dim_ = action_dim_;

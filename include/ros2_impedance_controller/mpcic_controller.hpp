@@ -90,7 +90,6 @@ protected:
   std::shared_ptr<TaskspacePredictor> predictor_;
   bool debug_{true};
 
-  double timestep_;
   uint8_t horizon_;
   // Online Active-Set strategy for QPs with varying matrices
   std::shared_ptr<qpOASES::SQProblem> sqproblem_;
