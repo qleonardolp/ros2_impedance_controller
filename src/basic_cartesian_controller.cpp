@@ -97,7 +97,7 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   update_start_ = steady_clock_->now();
 
   // rls_identification();
-  zspace_id_->update(pose_deviation_, twist_deviation_, accel_, 0);  // x-axis
+  zspace_ret_ = zspace_id_->update(pose_deviation_, twist_deviation_, accel_, 0);  // x-axis
 
   impedance_wrench_.noalias() =
     desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;

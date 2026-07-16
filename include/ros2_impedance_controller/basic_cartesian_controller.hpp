@@ -76,6 +76,7 @@ protected:
   VectorXd tau_desired_;
 
   std::shared_ptr<ZSpaceIdentification> zspace_id_;
+  int zspace_ret_;
 
   /* RLS identification */
   // Estimated parameters

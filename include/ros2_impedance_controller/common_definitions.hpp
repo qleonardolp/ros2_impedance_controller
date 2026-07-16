@@ -147,6 +147,9 @@ public:
     zspace_counter_ = 0;
   }
 
+  /**
+   * @brief Return plane normal estimation in the impedance space
+   */
   Eigen::Vector3d get_normal() { return zspace_normal_last_; }
 
 private:
