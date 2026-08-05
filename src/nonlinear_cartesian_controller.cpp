@@ -76,8 +76,6 @@ void NonlinearCartesianController::custom_configuration()
   // Initialize dynamic Eigen members
   tau_desired_.resize(get_dof());
   jacobian_pinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
-  jacobianT_pinv_ = Eigen::MatrixXd::Zero(kCartesianDim, get_dof());
-  jsim_jpinv_ = Eigen::MatrixXd::Zero(get_dof(), kCartesianDim);
   jsim_jpinv_dj_ = Eigen::MatrixXd::Zero(get_dof(), get_dof());
 
   zspace_id_ = std::make_shared<ZSpaceIdentification>(params_.zspace_window);
@@ -94,13 +92,8 @@ void NonlinearCartesianController::custom_activation()
 controller_interface::CallbackReturn NonlinearCartesianController::update_effort_commands()
 {
   update_start_ = steady_clock_->now();
-  jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
-  jacobianT_pinv_ = jacobian_.transpose().colPivHouseholderQr().inverse();
 
   accel_deviation_.noalias() = accel_;
-
-  jsim_jpinv_ = robot_data_->M * jacobian_pinv_;
-  actual_inertia_ = jacobianT_pinv_ * jsim_jpinv_;
 
   zspace_id_->update(pose_deviation_, twist_deviation_, accel_deviation_, 0);  // x-axis
 
@@ -118,6 +111,7 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
 
   effort_commands_ = kCmdAlpha * tau_desired_ + (1.0 - kCmdAlpha) * effort_commands_;
 
+  compute_osim();
   desired_inertia_ = actual_inertia_;  // to compute Hamiltonian function
   compute_hamiltonian();
   update_end_ = steady_clock_->now();
@@ -158,8 +152,10 @@ void NonlinearCartesianController::publish_status()
   status_msg_.data[19] = accel_deviation_(1);
   status_msg_.data[20] = accel_deviation_(2);
   status_msg_.data[21] = zspace_id_->get_normal()(0);
-  status_msg_.data[22] = zspace_id_->get_normal()(1);
-  status_msg_.data[23] = zspace_id_->get_normal()(2);
+  status_msg_.data[22] =
+    zspace_id_->get_normal()(1) / zspace_id_->get_normal()(0) * desired_stiffness_.diagonal()(0);
+  status_msg_.data[23] =
+    zspace_id_->get_normal()(2) / zspace_id_->get_normal()(0) * desired_stiffness_.diagonal()(0);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
   status_rt_publisher_->try_publish(status_msg_);
@@ -180,7 +176,10 @@ void NonlinearCartesianController::update_damping()
   pinocchio::cholesky::decompose(robot_model_, *robot_data_.get());
   pinocchio::cholesky::computeMinv(robot_model_, *robot_data_.get());
 
-  jsim_jpinv_dj_ = jsim_jpinv_ * jacobian_dt_;  // Base class updates `jacobian_dt_`
+  jacobian_pinv_ = jacobian_.completeOrthogonalDecomposition().pseudoInverse();
+
+  jsim_jpinv_dj_ =
+    robot_data_->M * jacobian_pinv_ * jacobian_dt_;  // Base class updates `jacobian_dt_`
 
   // Partitioning check
   is_dissipative_ = true;

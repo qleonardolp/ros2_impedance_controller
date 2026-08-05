@@ -106,8 +106,6 @@ protected:
   std::shared_ptr<ZSpaceIdentification> zspace_id_;
 
   Eigen::MatrixXd jacobian_pinv_;
-  Eigen::MatrixXd jacobianT_pinv_;
-  Eigen::MatrixXd jsim_jpinv_;
   Eigen::MatrixXd jsim_jpinv_dj_;
 };
 
