@@ -95,7 +95,11 @@ controller_interface::CallbackReturn NonlinearCartesianController::update_effort
 
   accel_deviation_.noalias() = accel_;
 
-  zspace_id_->update(pose_deviation_, twist_deviation_, accel_deviation_, 0);  // x-axis
+  zspace_id_->update(pose_deviation_, twist_deviation_, accel_deviation_, 2);  // z-axis
+
+  estimated_(0) = desired_stiffness_.diagonal()(2);
+  estimated_(1) = zspace_id_->get_normal()(1) / zspace_id_->get_normal()(0) * estimated_(0);
+  estimated_(2) = zspace_id_->get_normal()(2) / zspace_id_->get_normal()(0) * estimated_(0);
 
   update_stiffness();
   // update_damping();
@@ -129,7 +133,7 @@ void NonlinearCartesianController::publish_status()
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative
-  status_msg_.data[4] = actual_inertia_(0, 0);
+  status_msg_.data[4] = actual_inertia_(2, 2);
   // Impedance I/O power
   status_msg_.data[5] = -twist_deviation_.transpose() * impedance_wrench_;
 
@@ -151,11 +155,10 @@ void NonlinearCartesianController::publish_status()
   status_msg_.data[18] = accel_deviation_(0);
   status_msg_.data[19] = accel_deviation_(1);
   status_msg_.data[20] = accel_deviation_(2);
-  status_msg_.data[21] = zspace_id_->get_normal()(0);
-  status_msg_.data[22] =
-    zspace_id_->get_normal()(1) / zspace_id_->get_normal()(0) * desired_stiffness_.diagonal()(0);
+  status_msg_.data[21] = -estimated_.dot(zspace_id_->get_centroid());
+  status_msg_.data[22] = -impedance_wrench_(2);
   status_msg_.data[23] =
-    zspace_id_->get_normal()(2) / zspace_id_->get_normal()(0) * desired_stiffness_.diagonal()(0);
+    zspace_id_->get_normal()(2) / zspace_id_->get_normal()(0) * desired_stiffness_.diagonal()(2);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
   status_rt_publisher_->try_publish(status_msg_);

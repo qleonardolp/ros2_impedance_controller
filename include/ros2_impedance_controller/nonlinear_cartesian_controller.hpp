@@ -104,6 +104,7 @@ protected:
   VectorXd tau_desired_;
 
   std::shared_ptr<ZSpaceIdentification> zspace_id_;
+  Eigen::Vector3d estimated_;
 
   Eigen::MatrixXd jacobian_pinv_;
   Eigen::MatrixXd jsim_jpinv_dj_;

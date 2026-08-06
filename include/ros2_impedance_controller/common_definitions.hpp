@@ -152,6 +152,11 @@ public:
    */
   Eigen::Vector3d get_normal() { return zspace_normal_last_; }
 
+  /**
+   * @brief Return zspace points centroid (mean) for the last window
+   */
+  Eigen::Vector3d get_centroid() { return zspace_mean_; }
+
 private:
   size_t zspace_window_;
   size_t zspace_counter_;
