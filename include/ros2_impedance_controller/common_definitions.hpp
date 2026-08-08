@@ -89,6 +89,7 @@ public:
     }
     zspace_points_ = std::make_shared<SlidingWindow>(window_size, 3);
     zspace_normal_last_ << 1.0, 0.0, 0.0;
+    zspace_M_.setZero();
     zspace_is_steady_ = false;
     zspace_counter_ = 0;
   }
@@ -134,6 +135,7 @@ public:
       {
         zspace_normal_last_ = kLPFAlpha * zspace_normal_ + (1.0 - kLPFAlpha) * zspace_normal_last_;
       }
+      zspace_M_.setZero();
       zspace_counter_ = 0;
       return 0;
     }
@@ -142,6 +144,7 @@ public:
 
   void reset_estimation()
   {
+    zspace_M_.setZero();
     zspace_normal_last_ << 1.0, 0.0, 0.0;
     zspace_is_steady_ = false;
     zspace_counter_ = 0;
