@@ -86,7 +86,7 @@ void NonlinearCartesianController::custom_activation()
   // Dynamic size members (joint space dim)
   tau_desired_.setZero();
 
-  zspace_id_->reset_estimation();
+  zspace_id_->reset();
 }
 
 controller_interface::CallbackReturn NonlinearCartesianController::update_effort_commands()

@@ -75,6 +75,8 @@ protected:
   // Command terms
   VectorXd tau_desired_;
 
+  std::shared_ptr<ZSpaceRegression> zspace_regressor_;
+
   std::shared_ptr<ZSpaceIdentification> zspace_id_;
   int zspace_ret_;
 

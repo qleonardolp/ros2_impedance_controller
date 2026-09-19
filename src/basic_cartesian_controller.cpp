@@ -75,6 +75,7 @@ void BasicCartesianController::custom_configuration()
   tau_desired_.resize(get_dof());
 
   zspace_id_ = std::make_shared<ZSpaceIdentification>(params_.zspace_window);
+  zspace_regressor_ = std::make_shared<ZSpaceRegression>(8);
 }
 
 void BasicCartesianController::custom_activation()
@@ -89,7 +90,8 @@ void BasicCartesianController::custom_activation()
   rls_theta_(1) = desired_stiffness_.diagonal()(2);  // k/m
   rls_cov_ = 10 * Eigen::Matrix2d::Identity();
 
-  zspace_id_->reset_estimation();
+  zspace_id_->reset();
+  zspace_regressor_->reset();
 }
 
 controller_interface::CallbackReturn BasicCartesianController::update_effort_commands()
@@ -97,7 +99,10 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   update_start_ = steady_clock_->now();
 
   // rls_identification();
-  zspace_ret_ = zspace_id_->update(pose_deviation_, twist_deviation_, accel_, 0);  // x-axis
+  zspace_ret_ = zspace_id_->update(pose_deviation_, twist_deviation_, accel_, 2);  // x-axis
+
+  zspace_regressor_->update(
+    pose_deviation_, twist_deviation_, accel_, estimated_wrench_, 2);  // z-axis
 
   impedance_wrench_.noalias() =
     desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
@@ -149,9 +154,9 @@ void BasicCartesianController::publish_status()
   status_msg_.data[16] = twist_deviation_(4);
   status_msg_.data[17] = twist_deviation_(5);
 
-  status_msg_.data[18] = accel_(0);
-  status_msg_.data[19] = accel_(1);
-  status_msg_.data[20] = accel_(2);
+  status_msg_.data[18] = zspace_regressor_->get_solution()(0);  // promissor!
+  status_msg_.data[19] = zspace_regressor_->get_solution()(1);  // promissor
+  status_msg_.data[20] = zspace_regressor_->get_solution()(2);  // promissor
   status_msg_.data[21] = zspace_id_->get_normal()(0);
   status_msg_.data[22] = zspace_id_->get_normal()(1);
   status_msg_.data[23] = zspace_id_->get_normal()(2);

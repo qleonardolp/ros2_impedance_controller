@@ -142,7 +142,7 @@ public:
     return 3;
   }
 
-  void reset_estimation()
+  void reset()
   {
     zspace_M_.setZero();
     zspace_normal_last_ << 1.0, 0.0, 0.0;
@@ -170,6 +170,97 @@ private:
   Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> zspace_Meig_;  // M EigenSolver
   Eigen::Vector3d zspace_normal_last_;
   Eigen::Vector3d zspace_normal_;
+  bool zspace_is_steady_;
+};
+
+/**
+ * \brief Extended impedance space linear regression.
+ *
+ * Run a rolling window regression upon e, de, dde, and f_int time series.
+ * The output is the estimated mass, damping, sitffness and residue [m, d, k, r].
+ */
+class ZSpaceRegression
+{
+public:
+  /**
+   * @brief Constructor
+   *
+   * @param window_size Time window size. Must be at least 4.
+   */
+  explicit ZSpaceRegression(size_t window_size) : zspace_window_(window_size)
+  {
+    if (window_size < 4)
+    {
+      window_size = 4;
+      zspace_window_ = window_size;
+    }
+    zspace_points_ = std::make_shared<SlidingWindow>(window_size, 4);
+    solution_last_.setOnes();
+    A_.resize(window_size, 4);
+    A_.setOnes();
+    zspace_is_steady_ = false;
+    zspace_counter_ = 0;
+  }
+
+  /**
+   * @brief Regression update method
+   *
+   * Should be called in the main loop. It handle the time window downsample internally.
+   */
+  int update(
+    const Vector6d deviation, const Vector6d twist, const Vector6d accel, const Vector6d wrench,
+    const size_t axis)
+  {
+    // Check data integrity
+    if (deviation.hasNaN() || twist.hasNaN() || accel.hasNaN() || wrench.hasNaN()) return 1;
+
+    zspace_new_ << deviation(axis), twist(axis), accel(axis), wrench(axis);
+    // Check steady state
+    zspace_is_steady_ = zspace_new_.head<2>().norm() < 1e-3;  // accel is noisy so we neglect it
+    if (zspace_is_steady_)
+    {
+      zspace_counter_ = 0;
+      return 2;
+    }
+
+    zspace_points_->push(zspace_new_);
+    zspace_counter_++;
+    if (zspace_counter_ % zspace_window_ == 0)
+    {
+      A_.leftCols<3>() = zspace_points_->get_buffer().leftCols<3>();
+      solution_.noalias() =
+        A_.fullPivHouseholderQr().solve(zspace_points_->get_buffer().rightCols<1>());
+      // Neglect negative params (k,d,m):
+      if (solution_(0) > 0 && solution_(1) > 0 && solution_(2) > 0)
+      {
+        solution_last_ = kLPFAlpha * solution_ + (1.0 - kLPFAlpha) * solution_last_;
+      }
+      zspace_counter_ = 0;
+      return 0;
+    }
+    return 3;
+  }
+
+  void reset()
+  {
+    solution_last_.setOnes();
+    zspace_is_steady_ = false;
+    zspace_counter_ = 0;
+  }
+
+  /**
+   * @brief Return the regression solution in the extended impedance space
+   */
+  Eigen::Vector4d get_solution() { return solution_last_; }
+
+private:
+  size_t zspace_window_;
+  size_t zspace_counter_;
+  std::shared_ptr<SlidingWindow> zspace_points_;
+  Eigen::MatrixXd A_;  // A columns are e, de, dde, and '1'. (A.x = b)
+  Eigen::Vector4d zspace_new_;
+  Eigen::Vector4d solution_last_;
+  Eigen::Vector4d solution_;
   bool zspace_is_steady_;
 };
 
