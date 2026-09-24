@@ -75,7 +75,7 @@ void BasicCartesianController::custom_configuration()
   tau_desired_.resize(get_dof());
 
   zspace_id_ = std::make_shared<ZSpaceIdentification>(params_.zspace_window);
-  zspace_regressor_ = std::make_shared<ZSpaceRegression>(8);
+  zspace_regressor_ = std::make_shared<ZSpaceRegression>(params_.zspace_window);
 }
 
 void BasicCartesianController::custom_activation()
