@@ -76,7 +76,8 @@ protected:
   VectorXd tau_desired_;
 
   std::shared_ptr<ZSpaceRegression> zspace_regressor_;
-
+  std::shared_ptr<RegressionWithK> regressor_;
+  Vector6d wrench_minus_Ke_;
   std::shared_ptr<ZSpaceIdentification> zspace_id_;
   int zspace_ret_;
 

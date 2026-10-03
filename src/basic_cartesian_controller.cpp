@@ -76,6 +76,7 @@ void BasicCartesianController::custom_configuration()
 
   zspace_id_ = std::make_shared<ZSpaceIdentification>(params_.zspace_window);
   zspace_regressor_ = std::make_shared<ZSpaceRegression>(params_.zspace_window);
+  regressor_ = std::make_shared<RegressionWithK>(params_.zspace_window);
 }
 
 void BasicCartesianController::custom_activation()
@@ -91,6 +92,7 @@ void BasicCartesianController::custom_activation()
   rls_cov_ = 10 * Eigen::Matrix2d::Identity();
 
   zspace_id_->reset();
+  regressor_->reset();
   zspace_regressor_->reset();
 }
 
@@ -99,10 +101,13 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
   update_start_ = steady_clock_->now();
 
   // rls_identification();
-  zspace_ret_ = zspace_id_->update(pose_deviation_, twist_deviation_, accel_, 2);  // x-axis
+  // zspace_ret_ = zspace_id_->update(pose_deviation_, twist_deviation_, accel_, 2);  // x-axis
 
   zspace_regressor_->update(
     pose_deviation_, twist_deviation_, accel_, estimated_wrench_, 2);  // z-axis
+
+  wrench_minus_Ke_ = estimated_wrench_ - desired_stiffness_ * pose_deviation_;
+  regressor_->update(accel_, twist_deviation_, wrench_minus_Ke_, 2);
 
   impedance_wrench_.noalias() =
     desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
@@ -157,9 +162,9 @@ void BasicCartesianController::publish_status()
   status_msg_.data[18] = zspace_regressor_->get_solution()(0);  // promissor!
   status_msg_.data[19] = zspace_regressor_->get_solution()(1);  // promissor
   status_msg_.data[20] = zspace_regressor_->get_solution()(2);  // promissor
-  status_msg_.data[21] = zspace_id_->get_normal()(0);
-  status_msg_.data[22] = zspace_id_->get_normal()(1);
-  status_msg_.data[23] = zspace_id_->get_normal()(2);
+  status_msg_.data[21] = regressor_->get_solution()(0);
+  status_msg_.data[22] = regressor_->get_solution()(1);
+  status_msg_.data[23] = regressor_->get_solution()(2);
 
   status_msg_.data[24] = (update_end_ - update_start_).seconds();
   status_rt_publisher_->try_publish(status_msg_);
