@@ -107,7 +107,7 @@ controller_interface::CallbackReturn BasicCartesianController::update_effort_com
     pose_deviation_, twist_deviation_, accel_, estimated_wrench_, 2);  // z-axis
 
   wrench_minus_Ke_ = estimated_wrench_ - desired_stiffness_ * pose_deviation_;
-  regressor_->update(accel_, twist_deviation_, wrench_minus_Ke_, 2);
+  regressor_->update(accel_, twist_deviation_, wrench_minus_Ke_, 2);  // z-axis
 
   impedance_wrench_.noalias() =
     desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
@@ -140,7 +140,7 @@ void BasicCartesianController::publish_status()
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative
-  status_msg_.data[4] = actual_inertia_(0, 0);
+  status_msg_.data[4] = actual_inertia_(2, 2);
   // Impedance I/O power
   status_msg_.data[5] = -twist_deviation_.transpose() * impedance_wrench_;
 

@@ -71,6 +71,8 @@ private:
  *
  * Least square plane fitting from "Estimating Surface Normals in Noisy Point Cloud Data".
  * Ref.: https://dl.acm.org/doi/pdf/10.1145/777792.777840
+ *
+ * Main limitation: does not account for `f_int`.
  */
 class ZSpaceIdentification
 {
@@ -265,7 +267,7 @@ private:
 };
 
 /**
- * \brief Impedance space linear regression, with known k and f_int.
+ * \brief Impedance space linear regression, with known `k` and `f_int`.
  *
  * Run a rolling window regression upon dde, de, and `f_int - k*e` time series.
  * The output is the estimated mass, damping and residue [m, d, r].
@@ -305,7 +307,7 @@ public:
 
     zspace_new_ << accel(axis), twist(axis), wrench(axis);
     // Check steady state
-    zspace_is_steady_ = zspace_new_.head<2>().norm() < 1e-3;  // accel is noisy so we neglect it
+    zspace_is_steady_ = zspace_new_.norm() < 1e-3;
     if (zspace_is_steady_)
     {
       zspace_counter_ = 0;
