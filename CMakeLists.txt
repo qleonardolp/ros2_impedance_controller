@@ -88,6 +88,7 @@ if(qpOASES_FOUND)
 
   add_library(mpcic_controller SHARED
     src/taskspace_predictor.cpp
+    src/impedance_estimator.cpp
     src/mpcic_controller.cpp
   )
 

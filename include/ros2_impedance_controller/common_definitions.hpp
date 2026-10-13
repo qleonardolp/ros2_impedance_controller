@@ -307,7 +307,7 @@ public:
 
     zspace_new_ << accel(axis), twist(axis), wrench(axis);
     // Check steady state
-    zspace_is_steady_ = zspace_new_.norm() < 1e-3;
+    zspace_is_steady_ = zspace_new_.tail<2>().norm() < 1e-3;
     if (zspace_is_steady_)
     {
       zspace_counter_ = 0;
@@ -321,11 +321,11 @@ public:
       A_.leftCols<2>() = zspace_points_->get_buffer().leftCols<2>();
       solution_.noalias() =
         A_.fullPivHouseholderQr().solve(zspace_points_->get_buffer().rightCols<1>());
-      // Neglect negative params (k,d,m):
-      // if (solution_(0) > 0 && solution_(1) > 0 && solution_(2) > 0)
-      // {
-      solution_last_ = kLPFAlpha * solution_ + (1.0 - kLPFAlpha) * solution_last_;
-      // }
+      // Neglect negative params (m, d)
+      if (solution_(0) > 0 && solution_(1) > 0)
+      {
+        solution_last_ = kLPFAlpha * solution_ + (1.0 - kLPFAlpha) * solution_last_;
+      }
       zspace_counter_ = 0;
       return 0;
     }
