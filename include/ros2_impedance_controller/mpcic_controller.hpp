@@ -90,6 +90,8 @@ protected:
   ::mpcic_controller::Params params_;
 
   std::shared_ptr<ImpedanceEstimator> estimator_;
+  Vector6d wrench_minus_Ke_;
+  int estimator_status_;
 
   std::shared_ptr<TaskspacePredictor> predictor_;
   bool debug_{true};

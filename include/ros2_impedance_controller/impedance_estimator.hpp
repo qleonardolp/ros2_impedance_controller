@@ -38,9 +38,7 @@ const uint8_t kParamsDim = 3;
 class ImpedanceEstimator
 {
 public:
-  explicit ImpedanceEstimator(uint window_size, uint axis, double delta_t);
-
-  void init_sqproblem();
+  ImpedanceEstimator(uint window_size, uint axis, double delta_t);
 
   int update(const Vector6d accel, const Vector6d twist, const Vector6d wrench);
 
@@ -48,10 +46,6 @@ public:
    * @brief Return solution
    */
   Eigen::Vector3d get_solution() { return u_qp_.head(kParamsDim); }
-
-  void update_QP();
-
-  void assemble_Aqp();
 
 private:
   bool debug_{true};

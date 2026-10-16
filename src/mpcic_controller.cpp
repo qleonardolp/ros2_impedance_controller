@@ -79,7 +79,7 @@ void MPCIController::custom_configuration()
 
   cputime_ = delta_t_ * 0.5;  // timestep 50% margin
 
-  estimator_ = std::make_shared<ImpedanceEstimator>(5, 2, delta_t_);
+  estimator_ = std::make_shared<ImpedanceEstimator>(4, 2, delta_t_);
 
   predictor_ =
     std::make_shared<TaskspacePredictor>(delta_t_, horizon_, end_effector_link_name_, robot_model_);
@@ -151,6 +151,10 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
 
   // run taskspace predictor
   predictor_->predict(robot_q_, robot_dq_, robot_efforts_);
+
+  // run estimator
+  wrench_minus_Ke_ = estimated_wrench_ - desired_stiffness_ * pose_deviation_;
+  estimator_status_ = estimator_->update(accel_, twist_deviation_, wrench_minus_Ke_);
 
   // update Cost function and QP matrices
   update_references();
@@ -296,19 +300,13 @@ void MPCIController::publish_status()
   // Impedance Hamiltonian
   status_msg_.data[3] = hamiltonian_filtered_;
   // Impedance Hamiltonian derivative
-  status_msg_.data[4] = hamiltonian_derivative_;
+  status_msg_.data[4] = actual_inertia_(2, 2);
   // Impedance I/O power
   status_msg_.data[5] = twist_deviation_.transpose() * impedance_wrench_;
 
-  status_msg_.data[6] = pose_(0);
-  status_msg_.data[7] = pose_(1);
-  status_msg_.data[8] = pose_(2);
-  status_msg_.data[9] = pose_(3);
-  status_msg_.data[10] = pose_(4);
-  status_msg_.data[11] = pose_(5);
-
-  status_msg_.data[12] = tau_desired_(0);
-  status_msg_.data[13] = tau_desired_(1);
+  status_msg_.data[6] = estimator_->get_solution()(0);
+  status_msg_.data[7] = estimator_->get_solution()(1);
+  status_msg_.data[8] = estimator_status_;
 
   status_msg_.data[16] = cputime_qp_;                 // CPU time spent to solve
   status_msg_.data[17] = static_cast<int>(sqp_ret_);  // check QP status

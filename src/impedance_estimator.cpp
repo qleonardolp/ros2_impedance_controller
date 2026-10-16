@@ -14,6 +14,9 @@
 
 #include "ros2_impedance_controller/impedance_estimator.hpp"
 
+#include <iomanip>
+#include <iostream>
+
 namespace ros2_impedance_controller
 {
 ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta_t)
@@ -35,7 +38,7 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
 
   // QP Eigen members initialization:
   H_qp_ = Eigen::MatrixXd::Identity(action_dim_, action_dim_);
-  A_qp_ = Eigen::MatrixXd::Zero(constraints_dim_, action_dim_);
+  A_qp_ = Eigen::MatrixXd::Identity(constraints_dim_, action_dim_);
   g_qp_ = Eigen::MatrixXd::Zero(1, action_dim_);
   // QP action space bounds:
   du_max_ = Eigen::VectorXd::Ones(kParamsDim) * 0.9;
@@ -48,13 +51,19 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   u_qp_ = Eigen::VectorXd::Zero(action_dim_);
   b_qp_ = Eigen::VectorXd::Zero(window_);
   V_qp_ = Eigen::MatrixXd::Zero(window_, action_dim_);
+
   // Set constant matrices:
   Q_qp_ = Eigen::MatrixXd::Identity(action_dim_, action_dim_);
-}
 
-void ImpedanceEstimator::init_sqproblem()
-{
-  assemble_Aqp();
+  for (size_t i = kParamsDim; i < constraints_dim_; i++)
+  {
+    A_qp_(i, i - kParamsDim) = -1.0;
+  }
+
+  for (size_t i = 1; i <= window_; i++)
+  {
+    V_qp_(i - 1, i * kParamsDim - 1) = 1.0;
+  }
 
   // QP initialization
   int init_nWSR = 10;
@@ -78,7 +87,25 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
   ubA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) + du_max_;
 
   // update Cost function and QP matrices
-  update_QP();
+  for (size_t n = window_ - 1; n > 0; --n)
+  {
+    b_qp_(n) = b_qp_(n - 1);
+
+    V_qp_.block(n, n * kParamsDim, 1, kParamsDim - 1) =
+      V_qp_.block(n - 1, (n - 1) * kParamsDim, 1, kParamsDim - 1);
+  }
+
+  b_qp_(0) = -wrench(axis_);
+  V_qp_.block(0, 0, 1, kParamsDim - 1) << accel(axis_), twist(axis_);
+
+  if (debug_)
+  {
+    std::cout << "V_qp_: " << std::fixed << std::setprecision(2) << V_qp_ << std::endl;
+    debug_ = false;
+  }
+
+  H_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * V_qp_;
+  g_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * b_qp_;
 
   // Solve SQProblem
   sqp_ret_ = sqproblem_->hotstart(
@@ -86,34 +113,10 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
     ubA_qp_.data(), nWSR_qp_, &cputime_qp_);
   sqproblem_->getPrimalSolution(u_qp_.data());
 
-  if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED)  // Iteration failed.
-  {
-    return 2;
-  }
+  // TODO(me): its always ret '2', check sqp_ret_ value
+  if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED) return 2;  // Iteration failed.
 
-  /*
-  if (debug_)
-  {
-    RCLCPP_INFO_STREAM(
-      get_node()->get_logger(),
-      "H_qp_: " << std::fixed << std::setprecision(2) << H_qp_);
-    debug_ = false;
-  }
-  */
   return 0;
-}
-
-void ImpedanceEstimator::assemble_Aqp() {}
-
-void ImpedanceEstimator::update_QP()
-{
-  // b = L*F*x_0 - Z*x_{d} - J*g(q)
-  // b_qp_.noalias() = L_qp_ * predictor_->get_F_matrix() * task_states_
-  // V = L*G + J
-  // V_qp_.noalias() = L_qp_ * predictor_->get_G_matrix() + predictor_->get_Jn();
-
-  H_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * V_qp_;
-  g_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * b_qp_;
 }
 
 }  // namespace ros2_impedance_controller
