@@ -74,14 +74,18 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
 
 void ImpedanceEstimator::init_sqproblem()
 {
-  H_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * V_qp_;
-  g_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * b_qp_;
-
+  update_QP();
   // QP initialization
   int init_nWSR = 10;
   sqp_ret_ = sqproblem_->init(
     H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), lbA_qp_.data(),
     ubA_qp_.data(), init_nWSR);
+}
+
+void ImpedanceEstimator::update_QP()
+{
+  H_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * V_qp_;
+  g_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * b_qp_;
 }
 
 int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const Vector6d wrench)
@@ -93,6 +97,9 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
 
   // Check data integrity
   if (accel.hasNaN() || twist.hasNaN() || wrench.hasNaN()) return 1;
+
+  zspace_data_ << accel(axis_), twist(axis_), wrench(axis_);
+  if (zspace_data_.tail<2>().norm() < 0.02) return 0;
 
   // update inequality constraints
   lbA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) - du_max_;
@@ -109,8 +116,7 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
   V_qp_.block(0, 0, 1, kParamsDim - 1) << accel(axis_), twist(axis_);
   b_qp_(0) = -wrench(axis_);
 
-  H_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * V_qp_;
-  g_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * b_qp_;
+  update_QP();
 
   // Solve SQProblem
   sqp_ret_ = sqproblem_->hotstart(

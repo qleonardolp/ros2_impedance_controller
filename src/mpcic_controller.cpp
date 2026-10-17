@@ -79,7 +79,7 @@ void MPCIController::custom_configuration()
 
   cputime_ = delta_t_ * 0.5;  // timestep 50% margin
 
-  estimator_ = std::make_shared<ImpedanceEstimator>(8, 2, delta_t_);
+  estimator_ = std::make_shared<ImpedanceEstimator>(10, 2, delta_t_);
 
   predictor_ =
     std::make_shared<TaskspacePredictor>(delta_t_, horizon_, end_effector_link_name_, robot_model_);

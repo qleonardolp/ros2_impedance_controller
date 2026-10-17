@@ -23,11 +23,11 @@
 
 namespace ros2_impedance_controller
 {
+const uint8_t kParamsDim = 3;
+
 // Dynamic size row-major storage Eigen matrix,
 // easing qpOASES C-style access to matrices. Use m.data()
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXr;
-
-const uint8_t kParamsDim = 3;
 
 /**
  * \brief QP-based impedance params (M, D) estimator for adaptive control.
@@ -43,6 +43,8 @@ public:
   void init_sqproblem();
 
   int update(const Vector6d accel, const Vector6d twist, const Vector6d wrench);
+
+  void update_QP();
 
   /**
    * @brief Return solution
@@ -82,10 +84,11 @@ private:
    * V := [dde_k de_k 1 0 0 0 ...; 0 0 0 dde_{k-1} de_{k-1} 1 0 0 0 ...]
    */
 
-  Eigen::MatrixXd V_qp_;  // `V` multiplies `u` in the cost function
-  Eigen::VectorXd b_qp_;  // bias vector `b` in the cost function
-  Eigen::MatrixXd Q_qp_;  // Norm weight
-  Eigen::VectorXd u_qp_;  // QP solution
+  Eigen::MatrixXd V_qp_;         // `V` multiplies `u` in the cost function
+  Eigen::VectorXd b_qp_;         // bias vector `b` in the cost function
+  Eigen::MatrixXd Q_qp_;         // Norm weight
+  Eigen::VectorXd u_qp_;         // QP solution
+  Eigen::Vector3d zspace_data_;  // impedance space data: [dde, de, k*e - f_int]
 };
 
 }  // namespace ros2_impedance_controller
