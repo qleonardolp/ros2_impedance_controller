@@ -24,7 +24,7 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
 {
   if (window_size < kParamsDim) window_ = kParamsDim;
 
-  cputime_ = delta_t * 0.5;  // timestep 50% margin
+  cputime_ = delta_t * 0.2;  // timestep 80% margin
 
   action_dim_ = kParamsDim * window_;
   constraints_dim_ = action_dim_;
