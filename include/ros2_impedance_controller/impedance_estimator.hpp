@@ -40,6 +40,8 @@ class ImpedanceEstimator
 public:
   ImpedanceEstimator(uint window_size, uint axis, double delta_t);
 
+  void init_sqproblem();
+
   int update(const Vector6d accel, const Vector6d twist, const Vector6d wrench);
 
   /**

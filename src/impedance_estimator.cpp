@@ -41,11 +41,10 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   A_qp_ = Eigen::MatrixXd::Identity(constraints_dim_, action_dim_);
   g_qp_ = Eigen::MatrixXd::Zero(1, action_dim_);
   // QP action space bounds:
-  du_max_ = Eigen::VectorXd::Ones(kParamsDim) * 0.9;
-  ubA_qp_ = Eigen::VectorXd::Ones(constraints_dim_) * 0.9;
+  double slew_limit = 0.05;
+  du_max_ = Eigen::VectorXd::Ones(kParamsDim) * slew_limit;
+  ubA_qp_ = Eigen::VectorXd::Ones(constraints_dim_) * slew_limit;
   lbA_qp_ = -ubA_qp_;
-  ub_qp_ = Eigen::VectorXd::Ones(action_dim_) * 100.0;
-  lb_qp_ = -ub_qp_;
 
   // Cost function-specific initialization:
   u_qp_ = Eigen::VectorXd::Zero(action_dim_);
@@ -54,16 +53,29 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
 
   // Set constant matrices:
   Q_qp_ = Eigen::MatrixXd::Identity(action_dim_, action_dim_);
+  ub_qp_ = Eigen::VectorXd::Zero(action_dim_);
+  lb_qp_ = Eigen::VectorXd::Zero(action_dim_);
 
+  // Fill constant elements in A_qp_
   for (size_t i = kParamsDim; i < constraints_dim_; i++)
   {
     A_qp_(i, i - kParamsDim) = -1.0;
   }
-
+  // Fill constant elements in V_qp_, ub_qp_, lb_qp_
   for (size_t i = 1; i <= window_; i++)
   {
     V_qp_(i - 1, i * kParamsDim - 1) = 1.0;
+    ub_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 10.0, 30.0, 100.0;
+    lb_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 1e-3, -30.0, -100.0;
   }
+
+  init_sqproblem();
+}
+
+void ImpedanceEstimator::init_sqproblem()
+{
+  H_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * V_qp_;
+  g_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * b_qp_;
 
   // QP initialization
   int init_nWSR = 10;
@@ -89,20 +101,13 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
   // update Cost function and QP matrices
   for (size_t n = window_ - 1; n > 0; --n)
   {
-    b_qp_(n) = b_qp_(n - 1);
-
     V_qp_.block(n, n * kParamsDim, 1, kParamsDim - 1) =
       V_qp_.block(n - 1, (n - 1) * kParamsDim, 1, kParamsDim - 1);
-  }
 
-  b_qp_(0) = -wrench(axis_);
+    b_qp_(n) = b_qp_(n - 1);
+  }
   V_qp_.block(0, 0, 1, kParamsDim - 1) << accel(axis_), twist(axis_);
-
-  if (debug_)
-  {
-    std::cout << "V_qp_: " << std::fixed << std::setprecision(2) << V_qp_ << std::endl;
-    debug_ = false;
-  }
+  b_qp_(0) = -wrench(axis_);
 
   H_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * V_qp_;
   g_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * b_qp_;
@@ -113,7 +118,14 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
     ubA_qp_.data(), nWSR_qp_, &cputime_qp_);
   sqproblem_->getPrimalSolution(u_qp_.data());
 
-  // TODO(me): its always ret '2', check sqp_ret_ value
+  /*
+  if (debug_)
+  {
+    std::cout << "V_qp_: " << std::fixed << std::setprecision(2) << V_qp_ << std::endl;
+    debug_ = false;
+  }
+  */
+
   if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED) return 2;  // Iteration failed.
 
   return 0;
