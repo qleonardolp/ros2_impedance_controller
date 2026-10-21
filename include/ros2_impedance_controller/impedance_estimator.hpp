@@ -56,6 +56,7 @@ private:
 
   uint window_;
   uint axis_;
+  double delta_t_;
   // Online Active-Set strategy for QPs with varying matrices
   std::shared_ptr<qpOASES::SQProblem> sqproblem_;
   qpOASES::Options sqp_options_;  // QP Options
@@ -89,6 +90,10 @@ private:
   Eigen::MatrixXd Q_qp_;         // Norm weight
   Eigen::VectorXd u_qp_;         // QP solution
   Eigen::Vector3d zspace_data_;  // impedance space data: [dde, de, k*e - f_int]
+
+  // Momentum-based computation
+  double effort_integral_;  // time integral of the [force|torque]
+  Eigen::VectorXd twistN_;  // twist along the horizon
 };
 
 }  // namespace ros2_impedance_controller

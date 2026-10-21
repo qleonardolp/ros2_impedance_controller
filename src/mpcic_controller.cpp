@@ -79,7 +79,7 @@ void MPCIController::custom_configuration()
 
   cputime_ = delta_t_ * 0.5;  // timestep 50% margin
 
-  estimator_ = std::make_shared<ImpedanceEstimator>(10, 2, delta_t_);
+  estimator_ = std::make_shared<ImpedanceEstimator>(16, 2, delta_t_);
 
   predictor_ =
     std::make_shared<TaskspacePredictor>(delta_t_, horizon_, end_effector_link_name_, robot_model_);
@@ -153,8 +153,11 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
   predictor_->predict(robot_q_, robot_dq_, robot_efforts_);
 
   // run estimator
-  wrench_minus_Ke_ = estimated_wrench_ - desired_stiffness_ * pose_deviation_;
-  estimator_status_ = estimator_->update(accel_, twist_deviation_, wrench_minus_Ke_);
+  impedance_wrench_.noalias() =
+    desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_;
+
+  net_effort_.noalias() = estimated_wrench_ - impedance_wrench_;
+  estimator_status_ = estimator_->update(accel_, twist_deviation_, net_effort_);
 
   // update Cost function and QP matrices
   update_references();
@@ -169,9 +172,7 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
 
   if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED)  // Iteration failed.
   {
-    impedance_wrench_.noalias() =
-      (desired_stiffness_ * pose_deviation_ + desired_damping_ * twist_deviation_) * (-1);
-    tau_desired_ = jacobian_.transpose() * impedance_wrench_;
+    tau_desired_ = -jacobian_.transpose() * impedance_wrench_;
   }
   else
   {
@@ -302,12 +303,13 @@ void MPCIController::publish_status()
   // Impedance Hamiltonian derivative
   status_msg_.data[4] = actual_inertia_(2, 2);
   // Impedance I/O power
-  status_msg_.data[5] = twist_deviation_.transpose() * impedance_wrench_;
+  status_msg_.data[5] = -twist_deviation_.transpose() * impedance_wrench_;
 
   status_msg_.data[6] = estimator_->get_solution()(0);
   status_msg_.data[7] = estimator_->get_solution()(1);
   status_msg_.data[8] = estimator_->get_solution()(2);
   status_msg_.data[9] = estimator_status_;
+  status_msg_.data[10] = estimated_wrench_(2);
 
   status_msg_.data[16] = cputime_qp_;                 // CPU time spent to solve
   status_msg_.data[17] = static_cast<int>(sqp_ret_);  // check QP status

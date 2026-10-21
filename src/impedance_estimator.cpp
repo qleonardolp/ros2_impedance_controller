@@ -20,7 +20,7 @@
 namespace ros2_impedance_controller
 {
 ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta_t)
-: window_(window_size), axis_(axis)
+: window_(window_size), axis_(axis), delta_t_(delta_t)
 {
   if (window_size < kParamsDim) window_ = kParamsDim;
 
@@ -50,6 +50,8 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   u_qp_ = Eigen::VectorXd::Zero(action_dim_);
   b_qp_ = Eigen::VectorXd::Zero(window_);
   V_qp_ = Eigen::MatrixXd::Zero(window_, action_dim_);
+
+  twistN_ = Eigen::VectorXd::Zero(window_);
 
   // Set constant matrices:
   Q_qp_ = Eigen::MatrixXd::Identity(action_dim_, action_dim_);
@@ -98,8 +100,11 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
   // Check data integrity
   if (accel.hasNaN() || twist.hasNaN() || wrench.hasNaN()) return 1;
 
+  // TODO(@qleonardolp): implement the 'steady state' estimation, to compute only K
+  // maybe we need a finite state machine...
+
   zspace_data_ << accel(axis_), twist(axis_), wrench(axis_);
-  if (zspace_data_.tail<2>().norm() < 0.02) return 0;
+  if (zspace_data_.head<2>().norm() < 0.1) return 0;
 
   // update inequality constraints
   lbA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) - du_max_;
@@ -112,9 +117,25 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
       V_qp_.block(n - 1, (n - 1) * kParamsDim, 1, kParamsDim - 1);
 
     b_qp_(n) = b_qp_(n - 1);
+    twistN_(n) = twistN_(n - 1);
   }
   V_qp_.block(0, 0, 1, kParamsDim - 1) << accel(axis_), twist(axis_);
-  b_qp_(0) = -wrench(axis_);
+  b_qp_(0) = -wrench(axis_);  // net_effort_
+  twistN_(0) = twist(axis_);
+
+  // reset integrator
+  effort_integral_ = *b_qp_.tail(0).data();
+  for (size_t k = window_ - 2; k > 0; --k)
+  {
+    effort_integral_ += b_qp_(k) * delta_t_;
+  }
+
+  /*
+  if (abs(twistN_(0) - twistN_(window_ - 1)) > 1e-3)
+  {
+    u_qp_(0) = effort_integral_ / (twistN_(0) - twistN_(window_ - 1));
+  }
+  */
 
   update_QP();
 
