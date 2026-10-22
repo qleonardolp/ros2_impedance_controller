@@ -24,6 +24,8 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
 {
   if (window_size < kParamsDim) window_ = kParamsDim;
 
+  fsm_current_state_ = State::NULLSPACE;
+
   cputime_ = delta_t * 0.2;  // timestep 80% margin
 
   action_dim_ = kParamsDim * window_;
@@ -84,6 +86,15 @@ void ImpedanceEstimator::init_sqproblem()
     ubA_qp_.data(), init_nWSR);
 }
 
+void ImpedanceEstimator::update_state(
+  const Vector6d deviation, const Vector6d twist, const Vector6d accel, const Vector6d wrench)
+{
+  uint_fast8_t bitmask =
+    ((deviation(axis_) < kDeviationThreshold) << 3) | ((twist(axis_) < kTwistDevThreshold) << 2) |
+    ((accel(axis_) < kAccelDevThreshold) << 1) | (wrench(axis_) < kIntEffortThreshold);
+  fsm_current_state_ = StateLUT[bitmask];
+}
+
 void ImpedanceEstimator::update_QP()
 {
   H_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * V_qp_;
@@ -139,11 +150,13 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
 
   update_QP();
 
+  /*
   // Solve SQProblem
   sqp_ret_ = sqproblem_->hotstart(
     H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), lbA_qp_.data(),
     ubA_qp_.data(), nWSR_qp_, &cputime_qp_);
   sqproblem_->getPrimalSolution(u_qp_.data());
+  */
 
   /*
   if (debug_)

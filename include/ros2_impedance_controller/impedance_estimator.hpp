@@ -23,7 +23,58 @@
 
 namespace ros2_impedance_controller
 {
+const double kDeviationThreshold = 0.002;
+const double kTwistDevThreshold = 0.010;
+const double kAccelDevThreshold = 0.050;
+const double kIntEffortThreshold = 1.00;
+
 const uint8_t kParamsDim = 3;
+
+/**
+ * @brief Finite State Machine enumeration.
+ *
+ * Classify the system dynamics between five (5) options:
+ *
+ * NULLSPACE: `e`, `de`, and `dde` (or `f_int`) = 0
+ *
+ * FREE_MOTION: `f_int` = 0
+ *
+ * DYNAMIC_INT: none = 0 (fallback for most of combinations)
+ *
+ * STATIC_INT: `de` and `dde` = 0
+ *
+ * EQUILIBRIUM: `e` and `de` = 0
+ */
+enum class State : uint_fast8_t
+{
+  NULLSPACE = 0,
+  FREE_MOTION,
+  DYNAMIC_INT,
+  STATIC_INT,
+  EQUILIBRIUM
+};
+
+/**
+ * FSM Look Up Table (LUT)
+ */
+constexpr State StateLUT[16] = {
+  State::DYNAMIC_INT,  // 0000
+  State::FREE_MOTION,  // 0001
+  State::DYNAMIC_INT,  // 0010
+  State::FREE_MOTION,  // 0011
+  State::DYNAMIC_INT,  // 0100
+  State::FREE_MOTION,  // 0101
+  State::STATIC_INT,   // 0110
+  State::FREE_MOTION,  // 0111
+  State::DYNAMIC_INT,  // 1000
+  State::FREE_MOTION,  // 1001
+  State::DYNAMIC_INT,  // 1010
+  State::FREE_MOTION,  // 1011
+  State::EQUILIBRIUM,  // 1100
+  State::EQUILIBRIUM,  // 1101
+  State::NULLSPACE,    // 1110: NULLSPACE
+  State::NULLSPACE     // 1111: NULLSPACE (highest priority)
+};
 
 // Dynamic size row-major storage Eigen matrix,
 // easing qpOASES C-style access to matrices. Use m.data()
@@ -42,6 +93,12 @@ public:
 
   void init_sqproblem();
 
+  /**
+   * @brief Update FSM state according with thresholds.
+   */
+  void update_state(
+    const Vector6d deviation, const Vector6d twist, const Vector6d accel, const Vector6d wrench);
+
   int update(const Vector6d accel, const Vector6d twist, const Vector6d wrench);
 
   void update_QP();
@@ -51,12 +108,17 @@ public:
    */
   Eigen::Vector3d get_solution() { return u_qp_.head(kParamsDim); }
 
+  uint_fast8_t get_fsm_state() { return static_cast<uint_fast8_t>(fsm_current_state_); }
+
 private:
   bool debug_{true};
 
   uint window_;
   uint axis_;
   double delta_t_;
+
+  State fsm_current_state_;  // Finite State Machine current state
+
   // Online Active-Set strategy for QPs with varying matrices
   std::shared_ptr<qpOASES::SQProblem> sqproblem_;
   qpOASES::Options sqp_options_;  // QP Options
