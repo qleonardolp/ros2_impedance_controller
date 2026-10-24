@@ -32,6 +32,8 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   constraints_dim_ = action_dim_;
   nWSR_ = 5 * (action_dim_ + constraints_dim_);  // TODO(@qleonardolp): validate reference
 
+  zspace_point_.setZero();
+
   // Instantiate and configure SQProblem class ptr:
   sqproblem_ = std::make_shared<qpOASES::SQProblem>(action_dim_, constraints_dim_);
   sqp_options_.setToMPC();  // options to minimum solution time
@@ -53,8 +55,6 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   b_qp_ = Eigen::VectorXd::Zero(window_);
   V_qp_ = Eigen::MatrixXd::Zero(window_, action_dim_);
 
-  twistN_ = Eigen::VectorXd::Zero(window_);
-
   // Set constant matrices:
   Q_qp_ = Eigen::MatrixXd::Identity(action_dim_, action_dim_);
   ub_qp_ = Eigen::VectorXd::Zero(action_dim_);
@@ -69,8 +69,8 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   for (size_t i = 1; i <= window_; i++)
   {
     V_qp_(i - 1, i * kParamsDim - 1) = 1.0;
-    ub_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 10.0, 30.0, 100.0;
-    lb_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 1e-3, -30.0, -100.0;
+    ub_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 10000.0, 30.0, 10.0, 100.0;
+    lb_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 1e-3, -30.0, 1e-3, -100.0;
   }
 
   init_sqproblem();
@@ -86,13 +86,26 @@ void ImpedanceEstimator::init_sqproblem()
     ubA_qp_.data(), init_nWSR);
 }
 
-void ImpedanceEstimator::update_state(
+int ImpedanceEstimator::update_state(
   const Vector6d deviation, const Vector6d twist, const Vector6d accel, const Vector6d wrench)
 {
-  uint_fast8_t bitmask =
-    ((deviation(axis_) < kDeviationThreshold) << 3) | ((twist(axis_) < kTwistDevThreshold) << 2) |
-    ((accel(axis_) < kAccelDevThreshold) << 1) | (wrench(axis_) < kIntEffortThreshold);
+  // Check data integrity
+  if (deviation.hasNaN() || twist.hasNaN() || accel.hasNaN() || wrench.hasNaN()) return 1;
+
+  // TODO(@qleonardolp): LPF accel
+
+  uint_fast8_t bitmask = ((abs(deviation(axis_)) < kDeviationThreshold) << 3) |
+                         ((abs(twist(axis_)) < kTwistDevThreshold) << 2) |
+                         ((abs(accel(axis_)) < kAccelDevThreshold) << 1) |
+                         (abs(wrench(axis_)) < kIntEffortThreshold);
   fsm_current_state_ = StateLUT[bitmask];
+
+  zspace_point_ << deviation(axis_), twist(axis_), accel(axis_), wrench(axis_);
+
+  // Update constraints vector accordingly
+  (this->*constraint_table_[get_fsm_state()])();
+
+  return 0;
 }
 
 void ImpedanceEstimator::update_QP()
@@ -101,25 +114,18 @@ void ImpedanceEstimator::update_QP()
   g_qp_.noalias() = 2 * V_qp_.transpose() * Q_qp_ * b_qp_;
 }
 
-int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const Vector6d wrench)
+int ImpedanceEstimator::update()
 {
   // hotstart method output the taken nWSR and cputime values in place.
   // Then we must reset those values at every loop iteration
   cputime_qp_ = cputime_;
   nWSR_qp_ = nWSR_;
 
-  // Check data integrity
-  if (accel.hasNaN() || twist.hasNaN() || wrench.hasNaN()) return 1;
-
-  // TODO(@qleonardolp): implement the 'steady state' estimation, to compute only K
-  // maybe we need a finite state machine...
-
-  zspace_data_ << accel(axis_), twist(axis_), wrench(axis_);
-  if (zspace_data_.head<2>().norm() < 0.1) return 0;
-
   // update inequality constraints
   lbA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) - du_max_;
   ubA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) + du_max_;
+
+  // TODO(@qleonardolp): refact the QP definition
 
   // update Cost function and QP matrices
   for (size_t n = window_ - 1; n > 0; --n)
@@ -128,35 +134,17 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
       V_qp_.block(n - 1, (n - 1) * kParamsDim, 1, kParamsDim - 1);
 
     b_qp_(n) = b_qp_(n - 1);
-    twistN_(n) = twistN_(n - 1);
   }
-  V_qp_.block(0, 0, 1, kParamsDim - 1) << accel(axis_), twist(axis_);
-  b_qp_(0) = -wrench(axis_);  // net_effort_
-  twistN_(0) = twist(axis_);
-
-  // reset integrator
-  effort_integral_ = *b_qp_.tail(0).data();
-  for (size_t k = window_ - 2; k > 0; --k)
-  {
-    effort_integral_ += b_qp_(k) * delta_t_;
-  }
-
-  /*
-  if (abs(twistN_(0) - twistN_(window_ - 1)) > 1e-3)
-  {
-    u_qp_(0) = effort_integral_ / (twistN_(0) - twistN_(window_ - 1));
-  }
-  */
+  V_qp_.block(0, 0, 1, kParamsDim - 1) << zspace_point_.head<3>();
+  b_qp_(0) = zspace_point_(3);
 
   update_QP();
 
-  /*
   // Solve SQProblem
   sqp_ret_ = sqproblem_->hotstart(
     H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), lbA_qp_.data(),
     ubA_qp_.data(), nWSR_qp_, &cputime_qp_);
   sqproblem_->getPrimalSolution(u_qp_.data());
-  */
 
   /*
   if (debug_)
@@ -169,6 +157,43 @@ int ImpedanceEstimator::update(const Vector6d accel, const Vector6d twist, const
   if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED) return 2;  // Iteration failed.
 
   return 0;
+}
+
+void ImpedanceEstimator::set_nullspace_constraints()
+{
+  for (size_t i = 1; i <= window_; i++)
+  {
+    ub_qp_.segment((window_ - i) * kParamsDim, 3) << u_qp_.head(3);
+    lb_qp_.segment((window_ - i) * kParamsDim, 3) << u_qp_.head(3);
+  }
+}
+
+void ImpedanceEstimator::set_free_motion_constraints()
+{
+  for (size_t i = 1; i <= window_; i++)
+  {
+    ub_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 10000.0, 30.0, 10.0, 100.0;
+    lb_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 1e-3, -30.0, 1e-3, -100.0;
+  }
+}
+
+void ImpedanceEstimator::set_static_int_constraints()
+{
+  double stiffness = abs(zspace_point_(3)) / abs(zspace_point_(0));
+  for (size_t i = 1; i <= window_; i++)
+  {
+    ub_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << stiffness, u_qp_(1), u_qp_(2), 100.0;
+    lb_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << stiffness, u_qp_(1), u_qp_(2), -100.0;
+  }
+}
+
+void ImpedanceEstimator::set_equilibrium_constraints()
+{
+  for (size_t i = 1; i <= window_; i++)
+  {
+    ub_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << u_qp_(0), u_qp_(1), 10.0, 100.0;
+    lb_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << u_qp_(0), u_qp_(1), 1e-3, -100.0;
+  }
 }
 
 }  // namespace ros2_impedance_controller

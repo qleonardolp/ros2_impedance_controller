@@ -25,10 +25,10 @@ namespace ros2_impedance_controller
 {
 const double kDeviationThreshold = 0.002;
 const double kTwistDevThreshold = 0.010;
-const double kAccelDevThreshold = 0.050;
+const double kAccelDevThreshold = 0.080;
 const double kIntEffortThreshold = 1.00;
 
-const uint8_t kParamsDim = 3;
+const uint8_t kParamsDim = 4;
 
 /**
  * @brief Finite State Machine enumeration.
@@ -96,21 +96,44 @@ public:
   /**
    * @brief Update FSM state according with thresholds.
    */
-  void update_state(
+  int update_state(
     const Vector6d deviation, const Vector6d twist, const Vector6d accel, const Vector6d wrench);
 
-  int update(const Vector6d accel, const Vector6d twist, const Vector6d wrench);
-
-  void update_QP();
+  int update();
 
   /**
    * @brief Return solution
    */
-  Eigen::Vector3d get_solution() { return u_qp_.head(kParamsDim); }
+  Eigen::Vector4d get_solution() { return u_qp_.head(kParamsDim); }
 
   uint_fast8_t get_fsm_state() { return static_cast<uint_fast8_t>(fsm_current_state_); }
 
 private:
+  /**
+   * @brief Update QP Hessian matrix and gradient vector
+   */
+  void update_QP();
+
+  void set_nullspace_constraints();
+
+  void set_free_motion_constraints();
+
+  void set_static_int_constraints();
+
+  void set_equilibrium_constraints();
+
+  // Class method pointer
+  using Functor = void (ImpedanceEstimator::*)();
+
+  // Dispatch Table
+  static constexpr Functor constraint_table_[] = {
+    &ImpedanceEstimator::set_nullspace_constraints,    // 0: NULLSPACE
+    &ImpedanceEstimator::set_free_motion_constraints,  // 1: FREE_MOTION
+    &ImpedanceEstimator::set_free_motion_constraints,  // 2: DYNAMIC_INT
+    &ImpedanceEstimator::set_static_int_constraints,   // 3: STATIC_INT
+    &ImpedanceEstimator::set_equilibrium_constraints   // 4: EQUILIBRIUM
+  };
+
   bool debug_{true};
 
   uint window_;
@@ -147,15 +170,11 @@ private:
    * V := [dde_k de_k 1 0 0 0 ...; 0 0 0 dde_{k-1} de_{k-1} 1 0 0 0 ...]
    */
 
-  Eigen::MatrixXd V_qp_;         // `V` multiplies `u` in the cost function
-  Eigen::VectorXd b_qp_;         // bias vector `b` in the cost function
-  Eigen::MatrixXd Q_qp_;         // Norm weight
-  Eigen::VectorXd u_qp_;         // QP solution
-  Eigen::Vector3d zspace_data_;  // impedance space data: [dde, de, k*e - f_int]
-
-  // Momentum-based computation
-  double effort_integral_;  // time integral of the [force|torque]
-  Eigen::VectorXd twistN_;  // twist along the horizon
+  Eigen::MatrixXd V_qp_;          // `V` multiplies `u` in the cost function
+  Eigen::VectorXd b_qp_;          // bias vector `b` in the cost function
+  Eigen::MatrixXd Q_qp_;          // Norm weight
+  Eigen::VectorXd u_qp_;          // QP solution
+  Eigen::Vector4d zspace_point_;  // impedance space point
 };
 
 }  // namespace ros2_impedance_controller
