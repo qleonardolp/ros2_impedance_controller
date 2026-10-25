@@ -160,7 +160,7 @@ controller_interface::CallbackReturn MPCIController::update_effort_commands()
   // estimator_status_ = estimator_->update(accel_, twist_deviation_, net_effort_);
 
   estimator_->update_state(pose_deviation_, twist_deviation_, accel_, estimated_wrench_);
-  estimator_->update();
+  estimator_status_ = estimator_->update();
 
   // update Cost function and QP matrices
   update_references();
@@ -311,7 +311,7 @@ void MPCIController::publish_status()
   status_msg_.data[6] = estimator_->get_solution()(0);
   status_msg_.data[7] = estimator_->get_solution()(1);
   status_msg_.data[8] = estimator_->get_solution()(2);
-  status_msg_.data[9] = estimator_->get_solution()(3);
+  status_msg_.data[9] = estimator_status_;
   status_msg_.data[10] = estimator_->get_fsm_state();
 
   status_msg_.data[16] = cputime_qp_;                 // CPU time spent to solve

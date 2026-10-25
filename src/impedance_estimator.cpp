@@ -16,6 +16,7 @@
 
 #include <iomanip>
 #include <iostream>
+#include <qpOASES/QProblemB.hpp>
 
 namespace ros2_impedance_controller
 {
@@ -24,15 +25,15 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
 {
   if (window_size < kParamsDim) window_ = kParamsDim;
 
+  state_counter_ = 0;
+  fsm_last_state_ = State::NULLSPACE;
   fsm_current_state_ = State::NULLSPACE;
 
   cputime_ = delta_t * 0.2;  // timestep 80% margin
 
-  action_dim_ = kParamsDim * window_;
+  action_dim_ = kParamsDim;
   constraints_dim_ = action_dim_;
   nWSR_ = 5 * (action_dim_ + constraints_dim_);  // TODO(@qleonardolp): validate reference
-
-  zspace_point_.setZero();
 
   // Instantiate and configure SQProblem class ptr:
   sqproblem_ = std::make_shared<qpOASES::SQProblem>(action_dim_, constraints_dim_);
@@ -46,7 +47,8 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   g_qp_ = Eigen::MatrixXd::Zero(1, action_dim_);
   // QP action space bounds:
   double slew_limit = 0.05;
-  du_max_ = Eigen::VectorXd::Ones(kParamsDim) * slew_limit;
+  du_max_ = Eigen::VectorXd::Ones(kParamsDim);
+  du_max_ << 500.0, 50.0, 0.50;
   ubA_qp_ = Eigen::VectorXd::Ones(constraints_dim_) * slew_limit;
   lbA_qp_ = -ubA_qp_;
 
@@ -60,18 +62,9 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   ub_qp_ = Eigen::VectorXd::Zero(action_dim_);
   lb_qp_ = Eigen::VectorXd::Zero(action_dim_);
 
-  // Fill constant elements in A_qp_
-  for (size_t i = kParamsDim; i < constraints_dim_; i++)
-  {
-    A_qp_(i, i - kParamsDim) = -1.0;
-  }
-  // Fill constant elements in V_qp_, ub_qp_, lb_qp_
-  for (size_t i = 1; i <= window_; i++)
-  {
-    V_qp_(i - 1, i * kParamsDim - 1) = 1.0;
-    ub_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 10000.0, 30.0, 10.0, 100.0;
-    lb_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 1e-3, -30.0, 1e-3, -100.0;
-  }
+  // Set bounds
+  ub_qp_ << 10000.0, 100.0, 40.0;
+  lb_qp_ << 1e-3, -100.0, 1e-3;
 
   init_sqproblem();
 }
@@ -100,11 +93,23 @@ int ImpedanceEstimator::update_state(
                          (abs(wrench(axis_)) < kIntEffortThreshold);
   fsm_current_state_ = StateLUT[bitmask];
 
-  zspace_point_ << deviation(axis_), twist(axis_), accel(axis_), wrench(axis_);
+  if (fsm_current_state_ == fsm_last_state_)
+  {
+    state_counter_++;
+    // update Cost function and QP matrices
+    for (size_t n = window_ - 1; n > 0; --n)
+    {
+      V_qp_.row(n) = V_qp_.row(n - 1);
+      b_qp_(n) = b_qp_(n - 1);
+    }
+    V_qp_.row(0) << deviation(axis_), twist(axis_), accel(axis_);
+    b_qp_(0) = wrench(axis_);
+  }
 
-  // Update constraints vector accordingly
-  (this->*constraint_table_[get_fsm_state()])();
+  // Update bounds vector accordingly
+  (this->*bounds_table_[get_fsm_state()])();
 
+  fsm_last_state_ = fsm_current_state_;
   return 0;
 }
 
@@ -121,30 +126,11 @@ int ImpedanceEstimator::update()
   cputime_qp_ = cputime_;
   nWSR_qp_ = nWSR_;
 
-  // update inequality constraints
-  lbA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) - du_max_;
-  ubA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) + du_max_;
+  if (state_counter_ % window_ != 0) return 0;
 
-  // TODO(@qleonardolp): refact the QP definition
+  state_counter_ = 0;
 
-  // update Cost function and QP matrices
-  for (size_t n = window_ - 1; n > 0; --n)
-  {
-    V_qp_.block(n, n * kParamsDim, 1, kParamsDim - 1) =
-      V_qp_.block(n - 1, (n - 1) * kParamsDim, 1, kParamsDim - 1);
-
-    b_qp_(n) = b_qp_(n - 1);
-  }
-  V_qp_.block(0, 0, 1, kParamsDim - 1) << zspace_point_.head<3>();
-  b_qp_(0) = zspace_point_(3);
-
-  update_QP();
-
-  // Solve SQProblem
-  sqp_ret_ = sqproblem_->hotstart(
-    H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), lbA_qp_.data(),
-    ubA_qp_.data(), nWSR_qp_, &cputime_qp_);
-  sqproblem_->getPrimalSolution(u_qp_.data());
+  // TODO(@me): subtract the average from each column and b
 
   /*
   if (debug_)
@@ -154,46 +140,45 @@ int ImpedanceEstimator::update()
   }
   */
 
+  // update inequality constraints
+  lbA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) - du_max_;
+  ubA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) + du_max_;
+
+  update_QP();
+
+  // Solve SQProblem
+  sqp_ret_ = sqproblem_->hotstart(
+    H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), lbA_qp_.data(),
+    ubA_qp_.data(), nWSR_qp_, &cputime_qp_);
+  sqproblem_->getPrimalSolution(u_qp_.data());
+
   if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED) return 2;  // Iteration failed.
 
   return 0;
 }
 
-void ImpedanceEstimator::set_nullspace_constraints()
+void ImpedanceEstimator::set_nullspace_bounds()
 {
-  for (size_t i = 1; i <= window_; i++)
-  {
-    ub_qp_.segment((window_ - i) * kParamsDim, 3) << u_qp_.head(3);
-    lb_qp_.segment((window_ - i) * kParamsDim, 3) << u_qp_.head(3);
-  }
+  ub_qp_ << u_qp_;
+  lb_qp_ << u_qp_;
 }
 
-void ImpedanceEstimator::set_free_motion_constraints()
+void ImpedanceEstimator::set_free_motion_bounds()
 {
-  for (size_t i = 1; i <= window_; i++)
-  {
-    ub_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 10000.0, 30.0, 10.0, 100.0;
-    lb_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << 1e-3, -30.0, 1e-3, -100.0;
-  }
+  ub_qp_ << 10000.0, 100.0, 40.0;
+  lb_qp_ << 1e-3, -100.0, 1e-3;
 }
 
-void ImpedanceEstimator::set_static_int_constraints()
+void ImpedanceEstimator::set_static_int_bounds()
 {
-  double stiffness = abs(zspace_point_(3)) / abs(zspace_point_(0));
-  for (size_t i = 1; i <= window_; i++)
-  {
-    ub_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << stiffness, u_qp_(1), u_qp_(2), 100.0;
-    lb_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << stiffness, u_qp_(1), u_qp_(2), -100.0;
-  }
+  ub_qp_ << 10000.0, u_qp_(1), u_qp_(2);
+  lb_qp_ << 1e-3, u_qp_(1), u_qp_(2);
 }
 
-void ImpedanceEstimator::set_equilibrium_constraints()
+void ImpedanceEstimator::set_equilibrium_bounds()
 {
-  for (size_t i = 1; i <= window_; i++)
-  {
-    ub_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << u_qp_(0), u_qp_(1), 10.0, 100.0;
-    lb_qp_.segment((window_ - i) * kParamsDim, kParamsDim) << u_qp_(0), u_qp_(1), 1e-3, -100.0;
-  }
+  ub_qp_ << u_qp_(0), u_qp_(1), 40.0;
+  lb_qp_ << u_qp_(0), u_qp_(1), 1e-3;
 }
 
 }  // namespace ros2_impedance_controller

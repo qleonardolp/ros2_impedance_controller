@@ -16,6 +16,7 @@
 #define ROS2_IMPEDANCE_CONTROLLER__IMPEDANCE_ESTIMATOR_HPP_
 
 #include <sys/types.h>
+#include <cstdint>
 #include <memory>
 #include <qpOASES.hpp>
 
@@ -28,7 +29,7 @@ const double kTwistDevThreshold = 0.010;
 const double kAccelDevThreshold = 0.080;
 const double kIntEffortThreshold = 1.00;
 
-const uint8_t kParamsDim = 4;
+const uint8_t kParamsDim = 3;  // [k d m]
 
 /**
  * @brief Finite State Machine enumeration.
@@ -104,9 +105,11 @@ public:
   /**
    * @brief Return solution
    */
-  Eigen::Vector4d get_solution() { return u_qp_.head(kParamsDim); }
+  Eigen::Vector3d get_solution() { return u_qp_.head(kParamsDim); }
 
   uint_fast8_t get_fsm_state() { return static_cast<uint_fast8_t>(fsm_current_state_); }
+
+  uint8_t get_counter() { return state_counter_; }
 
 private:
   /**
@@ -114,24 +117,24 @@ private:
    */
   void update_QP();
 
-  void set_nullspace_constraints();
+  void set_nullspace_bounds();
 
-  void set_free_motion_constraints();
+  void set_free_motion_bounds();
 
-  void set_static_int_constraints();
+  void set_static_int_bounds();
 
-  void set_equilibrium_constraints();
+  void set_equilibrium_bounds();
 
   // Class method pointer
   using Functor = void (ImpedanceEstimator::*)();
 
   // Dispatch Table
-  static constexpr Functor constraint_table_[] = {
-    &ImpedanceEstimator::set_nullspace_constraints,    // 0: NULLSPACE
-    &ImpedanceEstimator::set_free_motion_constraints,  // 1: FREE_MOTION
-    &ImpedanceEstimator::set_free_motion_constraints,  // 2: DYNAMIC_INT
-    &ImpedanceEstimator::set_static_int_constraints,   // 3: STATIC_INT
-    &ImpedanceEstimator::set_equilibrium_constraints   // 4: EQUILIBRIUM
+  static constexpr Functor bounds_table_[] = {
+    &ImpedanceEstimator::set_nullspace_bounds,    // 0: NULLSPACE
+    &ImpedanceEstimator::set_free_motion_bounds,  // 1: FREE_MOTION
+    &ImpedanceEstimator::set_free_motion_bounds,  // 2: DYNAMIC_INT
+    &ImpedanceEstimator::set_static_int_bounds,   // 3: STATIC_INT
+    &ImpedanceEstimator::set_equilibrium_bounds   // 4: EQUILIBRIUM
   };
 
   bool debug_{true};
@@ -141,6 +144,8 @@ private:
   double delta_t_;
 
   State fsm_current_state_;  // Finite State Machine current state
+  State fsm_last_state_;
+  uint8_t state_counter_;
 
   // Online Active-Set strategy for QPs with varying matrices
   std::shared_ptr<qpOASES::SQProblem> sqproblem_;
@@ -170,11 +175,10 @@ private:
    * V := [dde_k de_k 1 0 0 0 ...; 0 0 0 dde_{k-1} de_{k-1} 1 0 0 0 ...]
    */
 
-  Eigen::MatrixXd V_qp_;          // `V` multiplies `u` in the cost function
-  Eigen::VectorXd b_qp_;          // bias vector `b` in the cost function
-  Eigen::MatrixXd Q_qp_;          // Norm weight
-  Eigen::VectorXd u_qp_;          // QP solution
-  Eigen::Vector4d zspace_point_;  // impedance space point
+  Eigen::MatrixXd V_qp_;  // `V` multiplies `u` in the cost function
+  Eigen::VectorXd b_qp_;  // bias vector `b` in the cost function
+  Eigen::MatrixXd Q_qp_;  // Norm weight
+  Eigen::VectorXd u_qp_;  // QP solution
 };
 
 }  // namespace ros2_impedance_controller
