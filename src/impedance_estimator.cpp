@@ -14,6 +14,7 @@
 
 #include "ros2_impedance_controller/impedance_estimator.hpp"
 
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <qpOASES/QProblemB.hpp>
@@ -24,6 +25,15 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
 : window_(window_size), axis_(axis), delta_t_(delta_t)
 {
   if (window_size < kParamsDim) window_ = kParamsDim;
+
+  // Concurrent Learning
+  zspace_record_ = std::make_shared<SlidingWindow>(3, 3);
+  zspace_rank_checking_.setIdentity();
+  record_updated_ = false;
+
+  zspace_record_->push(Eigen::Vector3d(1.0, 0.0, 0.0));
+  zspace_record_->push(Eigen::Vector3d(0.0, 1.0, 0.0));
+  zspace_record_->push(Eigen::Vector3d(0.0, 0.0, 1.0));
 
   state_counter_ = 0;
   fsm_last_state_ = State::NULLSPACE;
@@ -109,6 +119,20 @@ int ImpedanceEstimator::update_state(
   // Update bounds vector accordingly
   (this->*bounds_table_[get_fsm_state()])();
 
+  // Update data record for CL:
+  record_updated_ = false;
+  zspace_rank_checking_ = zspace_record_->get_buffer();
+  zspace_new_point_ << deviation(axis_), twist(axis_), accel(axis_);
+  zspace_rank_checking_.row(0) = zspace_new_point_;
+
+  zspace_LU_.compute(zspace_rank_checking_);  // compute LU decomposition
+
+  if (zspace_LU_.rank() >= 3)
+  {
+    record_updated_ = true;
+    zspace_record_->push(zspace_new_point_);
+  }
+
   fsm_last_state_ = fsm_current_state_;
   return 0;
 }
@@ -144,8 +168,8 @@ int ImpedanceEstimator::update()
   lbA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) - du_max_;
   ubA_qp_.head(kParamsDim) = u_qp_.head(kParamsDim) + du_max_;
 
+  /*
   update_QP();
-
   // Solve SQProblem
   sqp_ret_ = sqproblem_->hotstart(
     H_qp_.data(), g_qp_.data(), A_qp_.data(), lb_qp_.data(), ub_qp_.data(), lbA_qp_.data(),
@@ -153,6 +177,7 @@ int ImpedanceEstimator::update()
   sqproblem_->getPrimalSolution(u_qp_.data());
 
   if (sqp_ret_ != qpOASES::returnValue::RET_QP_SOLVED) return 2;  // Iteration failed.
+  */
 
   return 0;
 }

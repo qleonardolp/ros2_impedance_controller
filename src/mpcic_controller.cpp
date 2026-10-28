@@ -312,7 +312,7 @@ void MPCIController::publish_status()
   status_msg_.data[7] = estimator_->get_solution()(1);
   status_msg_.data[8] = estimator_->get_solution()(2);
   status_msg_.data[9] = estimator_status_;
-  status_msg_.data[10] = estimator_->get_fsm_state();
+  status_msg_.data[10] = estimator_->get_record();
 
   status_msg_.data[16] = cputime_qp_;                 // CPU time spent to solve
   status_msg_.data[17] = static_cast<int>(sqp_ret_);  // check QP status

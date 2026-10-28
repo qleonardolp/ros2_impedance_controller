@@ -111,6 +111,8 @@ public:
 
   uint8_t get_counter() { return state_counter_; }
 
+  bool get_record() { return record_updated_; }
+
 private:
   /**
    * @brief Update QP Hessian matrix and gradient vector
@@ -179,6 +181,17 @@ private:
   Eigen::VectorXd b_qp_;  // bias vector `b` in the cost function
   Eigen::MatrixXd Q_qp_;  // Norm weight
   Eigen::VectorXd u_qp_;  // QP solution
+
+  /**
+   * Concurrent Learning for Convergence in Adaptive Control without
+   * Persistency of Excitation
+   */
+
+  std::shared_ptr<SlidingWindow> zspace_record_;  // Z-space recorded data [e de dde]
+  Eigen::Matrix<double, 3, 3> zspace_rank_checking_;
+  Eigen::FullPivLU<Eigen::Matrix3d> zspace_LU_;  // LU decomposition
+  Eigen::Vector3d zspace_new_point_;
+  bool record_updated_;
 };
 
 }  // namespace ros2_impedance_controller
