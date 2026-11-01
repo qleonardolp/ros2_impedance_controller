@@ -16,9 +16,7 @@
 #define ROS2_IMPEDANCE_CONTROLLER__IMPEDANCE_ESTIMATOR_HPP_
 
 #include <sys/types.h>
-#include <cstdint>
 #include <memory>
-#include <qpOASES.hpp>
 
 #include "ros2_impedance_controller/common_definitions.hpp"
 
@@ -77,22 +75,13 @@ constexpr State StateLUT[16] = {
   State::NULLSPACE     // 1111: NULLSPACE (highest priority)
 };
 
-// Dynamic size row-major storage Eigen matrix,
-// easing qpOASES C-style access to matrices. Use m.data()
-typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXr;
-
 /**
- * \brief QP-based impedance params (M, D) estimator for adaptive control.
- *
- * This estimator compute the best inertia and damping for a rolling window
- * from `ddx`, `dx`, and `f_int - k*e`. It assumes that k is known.
+ * \brief Concurrent Learning-based Z Estimator for Adaptive Control.
  */
 class ImpedanceEstimator
 {
 public:
   ImpedanceEstimator(uint window_size, uint axis, double delta_t);
-
-  void init_sqproblem();
 
   /**
    * @brief Update FSM state according with thresholds.
@@ -105,40 +94,13 @@ public:
   /**
    * @brief Return solution
    */
-  Eigen::Vector3d get_solution() { return u_qp_.head(kParamsDim); }
+  Eigen::Vector3d get_solution() { return zspace_new_point_; }
 
   uint_fast8_t get_fsm_state() { return static_cast<uint_fast8_t>(fsm_current_state_); }
-
-  uint8_t get_counter() { return state_counter_; }
 
   bool get_record() { return record_updated_; }
 
 private:
-  /**
-   * @brief Update QP Hessian matrix and gradient vector
-   */
-  void update_QP();
-
-  void set_nullspace_bounds();
-
-  void set_free_motion_bounds();
-
-  void set_static_int_bounds();
-
-  void set_equilibrium_bounds();
-
-  // Class method pointer
-  using Functor = void (ImpedanceEstimator::*)();
-
-  // Dispatch Table
-  static constexpr Functor bounds_table_[] = {
-    &ImpedanceEstimator::set_nullspace_bounds,    // 0: NULLSPACE
-    &ImpedanceEstimator::set_free_motion_bounds,  // 1: FREE_MOTION
-    &ImpedanceEstimator::set_free_motion_bounds,  // 2: DYNAMIC_INT
-    &ImpedanceEstimator::set_static_int_bounds,   // 3: STATIC_INT
-    &ImpedanceEstimator::set_equilibrium_bounds   // 4: EQUILIBRIUM
-  };
-
   bool debug_{true};
 
   uint window_;
@@ -146,47 +108,21 @@ private:
   double delta_t_;
 
   State fsm_current_state_;  // Finite State Machine current state
-  State fsm_last_state_;
-  uint8_t state_counter_;
 
-  // Online Active-Set strategy for QPs with varying matrices
-  std::shared_ptr<qpOASES::SQProblem> sqproblem_;
-  qpOASES::Options sqp_options_;  // QP Options
-  qpOASES::returnValue sqp_ret_;  // QP return value
-  int sqp_status_;                // QP simple status (see docs)
-  uint constraints_dim_;          // constraints space dimension (nC): DoF
-  uint action_dim_;               // action space dimension (nV): DoF*N
+  // State Variable Filter (2nd order low-pass)
+  Eigen::Matrix2d A_svf_;  // SVF state space A
+  Eigen::Vector2d B_svf_;  // SVF state space B
 
-  MatrixXr H_qp_;           // QP Hessian matrix
-  MatrixXr g_qp_;           // QP gradient vector
-  MatrixXr A_qp_;           // QP constraint matrix
-  Eigen::VectorXd lb_qp_;   // QP lower bound vector
-  Eigen::VectorXd ub_qp_;   // QP upper bound vector
-  Eigen::VectorXd lbA_qp_;  // QP lower constraints' bound vector
-  Eigen::VectorXd ubA_qp_;  // QP upper constraints' bound vector
-  Eigen::VectorXd du_max_;  // QP maximum action delta (u_{k+1} - u_{k})
-  int nWSR_;                // QP max number of working set recalculations (nWSR)
-  int nWSR_qp_;             // QP WSR for in place output in `hotstart` method
-  double cputime_;          // QP maximum allowed CPU time in seconds
-  double cputime_qp_;       // CPU time spent for QP solution (or to perform nWSR iterations)
+  Eigen::Vector2d e_state_;  // note: I'll be using 'x', since I'm not working with ddx_{ref}
+  Eigen::Vector2d fint_state_;
 
-  /**
-   * @note Cost function is: min_{p} (V*u + b)^T*Q*(V*u + b),
-   * where:
-   * b := -q = k*e - f_int
-   * V := [dde_k de_k 1 0 0 0 ...; 0 0 0 dde_{k-1} de_{k-1} 1 0 0 0 ...]
-   */
-
-  Eigen::MatrixXd V_qp_;  // `V` multiplies `u` in the cost function
-  Eigen::VectorXd b_qp_;  // bias vector `b` in the cost function
-  Eigen::MatrixXd Q_qp_;  // Norm weight
-  Eigen::VectorXd u_qp_;  // QP solution
+  Eigen::Vector2d de_state_;     // State derivative
+  Eigen::Vector2d dfint_state_;  // State derivative
 
   /**
    * Concurrent Learning for Convergence in Adaptive Control without
    * Persistency of Excitation
    */
-
   std::shared_ptr<SlidingWindow> zspace_record_;  // Z-space recorded data [e de dde]
   Eigen::Matrix<double, 3, 3> zspace_rank_checking_;
   Eigen::FullPivLU<Eigen::Matrix3d> zspace_LU_;  // LU decomposition
