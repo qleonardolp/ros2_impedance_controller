@@ -35,6 +35,12 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   zspace_stack_ = Eigen::MatrixXd::Zero(window_, kParamsDim);
   fint_stack_ = Eigen::VectorXd::Zero(window_);
 
+  grad_.setZero();
+  Gamma_ = 2e-3 * Eigen::Matrix3d::Identity();
+  theta_hat_ << 4500.0, 90.0, 8.0;  // theta 0
+  theta_lb_ << 0.0, 0.0, 0.100;     // TODO(@me): to be a ros2 param
+  theta_ub_ << 1e4, 1e3, 5e2;       // TODO(@me): to be a ros2 param
+
   lowest_lambda_ = 0.0;
   num_stored_ = 0;
   subst_idx_ = 0;
@@ -109,6 +115,37 @@ int ImpedanceEstimator::update()
     zspace_stack_.row(subst_idx_) = zspace_new_point_.transpose();
     fint_stack_(subst_idx_) = fint_new_;
   }
+
+  // Concurrent Learning udapte
+  // Classical gradient
+  grad_ = zspace_new_point_ * (fint_new_ - zspace_new_point_.dot(theta_hat_));
+
+  // History-related gradient term (Concurrent Learning)
+  if (num_stored_ == window_)
+  {
+    // Z^T * (F - Z * theta_hat)
+    grad_ += zspace_stack_.transpose() * (fint_stack_ - zspace_stack_ * theta_hat_);
+  }
+
+  dt_theta_.noalias() = Gamma_ * grad_;
+  // Projection operator (component-wise)
+  for (uint i = 0; i < kParamsDim; ++i)
+  {
+    if (theta_hat_(i) >= theta_ub_(i) && dt_theta_(i) > 0.0)
+    {
+      dt_theta_(i) = 0.0;
+    }
+    else if (theta_hat_(i) <= theta_lb_(i) && dt_theta_(i) < 0.0)
+    {
+      dt_theta_(i) = 0.0;
+    }
+  }
+
+  // Euler integration
+  theta_hat_ += dt_theta_ * delta_t_;
+  // Saturation
+  theta_hat_ = theta_hat_.cwiseMax(theta_lb_).cwiseMin(theta_ub_);
+
   return 0;
 }
 

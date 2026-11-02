@@ -94,13 +94,13 @@ public:
   /**
    * @brief Return solution
    */
-  Eigen::Vector3d get_solution() { return zspace_new_point_; }
+  Eigen::Vector3d get_solution() { return theta_hat_; }
 
   uint_fast8_t get_fsm_state() { return static_cast<uint_fast8_t>(fsm_current_state_); }
 
   int get_index() { return subst_idx_; }
 
-  double get_min_lambda() { return lowest_lambda_; }
+  double get_lambda() { return lowest_lambda_; }
 
 private:
   bool debug_{true};
@@ -136,9 +136,16 @@ private:
   Eigen::Matrix3d zTz_new_;                                  // z.T * z (new)
   Eigen::Matrix3d H_;                                        // information matrix
   Eigen::Matrix3d H_temp_;                                   // Temporary information matrix
-  Eigen::MatrixXd zspace_stack_;                             // zspace point time stack
-  Eigen::VectorXd fint_stack_;                               // f_{int} time stack
+  Eigen::MatrixXd zspace_stack_;                             // zspace point time stack (Z)
+  Eigen::VectorXd fint_stack_;                               // f_{int} time stack (F)
   Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> solver_H_;  // H EigenSolver
+
+  Eigen::Vector3d grad_;       // Gradient (descent) vector
+  Eigen::Matrix3d Gamma_;      // Learning rate matrix
+  Eigen::Vector3d theta_hat_;  // Estimated params [k, d, m]
+  Eigen::Vector3d dt_theta_;   // Estimate derivative
+  Eigen::Vector3d theta_ub_;   // Estimate upper bounds
+  Eigen::Vector3d theta_lb_;   // Estimate lower bounds
 };
 
 }  // namespace ros2_impedance_controller
