@@ -31,13 +31,13 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   fint_state_.setZero();
 
   // Concurrent Learning
-  zspace_record_ = std::make_shared<SlidingWindow>(3, 3);
-  zspace_rank_checking_.setIdentity();
-  record_updated_ = false;
+  H_.setZero();
+  zspace_stack_ = Eigen::MatrixXd::Zero(window_, kParamsDim);
+  fint_stack_ = Eigen::VectorXd::Zero(window_);
 
-  zspace_record_->push(Eigen::Vector3d(1.0, 0.0, 0.0));
-  zspace_record_->push(Eigen::Vector3d(0.0, 1.0, 0.0));
-  zspace_record_->push(Eigen::Vector3d(0.0, 0.0, 1.0));
+  lowest_lambda_ = 0.0;
+  num_stored_ = 0;
+  subst_idx_ = 0;
 
   fsm_current_state_ = State::NULLSPACE;
 }
@@ -62,35 +62,53 @@ int ImpedanceEstimator::update_state(
   fint_state_ += dfint_state_ * delta_t_;
 
   zspace_new_point_ << deviation(axis_), twist(axis_), e_state_(0);
-
-  // Update data record for CL:
-  record_updated_ = false;
-  zspace_rank_checking_ = zspace_record_->get_buffer();
-  zspace_rank_checking_.row(0) = zspace_new_point_;
-
-  zspace_LU_.compute(zspace_rank_checking_);  // compute LU decomposition
-
-  if (zspace_LU_.rank() >= 3)
-  {
-    record_updated_ = true;
-    zspace_record_->push(zspace_new_point_);
-  }
-
+  fint_new_ = fint_state_(0);
   return 0;
 }
 
 int ImpedanceEstimator::update()
 {
-  // TODO(@me): subtract the average from each column and b
+  zTz_new_ = zspace_new_point_ * zspace_new_point_.transpose();
 
-  /*
-  if (debug_)
+  // Initial buffer phase
+  if (num_stored_ < window_)
   {
-    std::cout << "V_qp_: " << std::fixed << std::setprecision(2) << V_qp_ << std::endl;
-    debug_ = false;
+    zspace_stack_.row(num_stored_) = zspace_new_point_.transpose();
+    fint_stack_(num_stored_) = fint_new_;
+    H_ += zTz_new_;
+    num_stored_++;
+    return 0;
   }
-  */
 
+  // O(N) evaluation
+  subst_idx_ = -1;
+  solver_H_.compute(H_);
+  lowest_lambda_ = solver_H_.eigenvalues()(0);
+
+  for (uint i = 0; i < window_; ++i)
+  {
+    // Matriz temporária usando Rank-1 update
+    H_temp_ = H_ - (zspace_stack_.row(i).transpose() * zspace_stack_.row(i)) + zTz_new_;
+
+    solver_H_.compute(H_temp_);
+    min_lambda_ = solver_H_.eigenvalues()(0);
+
+    // Maximize lowest eigen value
+    if (min_lambda_ > lowest_lambda_ + 1e-6)
+    {
+      lowest_lambda_ = min_lambda_;
+      subst_idx_ = i;
+    }
+  }
+
+  // Replace the least informative sample
+  if (subst_idx_ != -1)
+  {
+    H_ =
+      H_ - (zspace_stack_.row(subst_idx_).transpose() * zspace_stack_.row(subst_idx_)) + zTz_new_;
+    zspace_stack_.row(subst_idx_) = zspace_new_point_.transpose();
+    fint_stack_(subst_idx_) = fint_new_;
+  }
   return 0;
 }
 

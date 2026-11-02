@@ -16,7 +16,7 @@
 #define ROS2_IMPEDANCE_CONTROLLER__IMPEDANCE_ESTIMATOR_HPP_
 
 #include <sys/types.h>
-#include <memory>
+#include <cstdint>
 
 #include "ros2_impedance_controller/common_definitions.hpp"
 
@@ -98,7 +98,9 @@ public:
 
   uint_fast8_t get_fsm_state() { return static_cast<uint_fast8_t>(fsm_current_state_); }
 
-  bool get_record() { return record_updated_; }
+  int get_index() { return subst_idx_; }
+
+  double get_min_lambda() { return lowest_lambda_; }
 
 private:
   bool debug_{true};
@@ -113,21 +115,30 @@ private:
   Eigen::Matrix2d A_svf_;  // SVF state space A
   Eigen::Vector2d B_svf_;  // SVF state space B
 
-  Eigen::Vector2d e_state_;  // note: I'll be using 'x', since I'm not working with ddx_{ref}
+  Eigen::Vector2d e_state_;  // Using 'ddx' as the input
   Eigen::Vector2d fint_state_;
 
   Eigen::Vector2d de_state_;     // State derivative
   Eigen::Vector2d dfint_state_;  // State derivative
 
   /**
-   * Concurrent Learning for Convergence in Adaptive Control without
-   * Persistency of Excitation
+   * Concurrent Learning for Convergence in Adaptive Control
+   * without Persistency of Excitation
    */
-  std::shared_ptr<SlidingWindow> zspace_record_;  // Z-space recorded data [e de dde]
-  Eigen::Matrix<double, 3, 3> zspace_rank_checking_;
-  Eigen::FullPivLU<Eigen::Matrix3d> zspace_LU_;  // LU decomposition
-  Eigen::Vector3d zspace_new_point_;
-  bool record_updated_;
+  uint_fast8_t num_stored_;
+  int subst_idx_;  // Substitution index
+
+  double fint_new_;       // f_{int} new sample (filtered)
+  double lowest_lambda_;  // `H` lowest eigen value
+  double min_lambda_;     // temporary min lambda
+
+  Eigen::Vector3d zspace_new_point_;                         // zspace (e, de, dde) new point
+  Eigen::Matrix3d zTz_new_;                                  // z.T * z (new)
+  Eigen::Matrix3d H_;                                        // information matrix
+  Eigen::Matrix3d H_temp_;                                   // Temporary information matrix
+  Eigen::MatrixXd zspace_stack_;                             // zspace point time stack
+  Eigen::VectorXd fint_stack_;                               // f_{int} time stack
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> solver_H_;  // H EigenSolver
 };
 
 }  // namespace ros2_impedance_controller
