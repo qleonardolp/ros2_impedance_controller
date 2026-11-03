@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "ros2_impedance_controller/impedance_estimator.hpp"
+#include <cmath>
 
 namespace ros2_impedance_controller
 {
@@ -21,7 +22,7 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
 {
   if (window_size < kParamsDim) window_ = kParamsDim;
 
-  double svf_wn_ = 100;
+  double svf_wn_ = 80.0;
   double svf_zeta_ = 0.707;
 
   A_svf_ << 0, 1, -svf_wn_ * svf_wn_, -2 * svf_zeta_ * svf_wn_;
@@ -44,6 +45,10 @@ ImpedanceEstimator::ImpedanceEstimator(uint window_size, uint axis, double delta
   lowest_lambda_ = 0.0;
   num_stored_ = 0;
   subst_idx_ = 0;
+
+  est_omega_ = 10.0;
+  est_factor_ = 1.0;
+  est_error_ = 0.0;
 
   fsm_current_state_ = State::NULLSPACE;
 }
@@ -100,6 +105,7 @@ int ImpedanceEstimator::update()
     min_lambda_ = solver_H_.eigenvalues()(0);
 
     // Maximize lowest eigen value
+    // TODO(@me): decay lambda (induce a forgetting factor)
     if (min_lambda_ > lowest_lambda_ + 1e-6)
     {
       lowest_lambda_ = min_lambda_;
@@ -118,7 +124,8 @@ int ImpedanceEstimator::update()
 
   // Concurrent Learning udapte
   // Classical gradient
-  grad_ = zspace_new_point_ * (fint_new_ - zspace_new_point_.dot(theta_hat_));
+  est_error_ = fint_new_ - zspace_new_point_.dot(theta_hat_);
+  grad_ = zspace_new_point_ * est_error_;
 
   // History-related gradient term (Concurrent Learning)
   if (num_stored_ == window_)
@@ -129,6 +136,8 @@ int ImpedanceEstimator::update()
 
   dt_theta_.noalias() = Gamma_ * grad_;
   // Projection operator (component-wise)
+  // TODO(@qleonardolp): use fsm_current_state_ to force
+  // projection accordingly, updating k, d, or m when properly
   for (uint i = 0; i < kParamsDim; ++i)
   {
     if (theta_hat_(i) >= theta_ub_(i) && dt_theta_(i) > 0.0)
@@ -145,6 +154,10 @@ int ImpedanceEstimator::update()
   theta_hat_ += dt_theta_ * delta_t_;
   // Saturation
   theta_hat_ = theta_hat_.cwiseMax(theta_lb_).cwiseMin(theta_ub_);
+
+  est_omega_ = std::sqrt(theta_hat_(0) / theta_hat_(2));
+  // factor for 2% overshoot: 0.78 | D = 2 * ζ * sqrt(K * M)
+  est_factor_ = 2 * 0.78 * std::sqrt(theta_hat_(0) * theta_hat_(2));
 
   return 0;
 }

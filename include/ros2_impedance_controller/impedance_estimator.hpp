@@ -98,9 +98,11 @@ public:
 
   uint_fast8_t get_fsm_state() { return static_cast<uint_fast8_t>(fsm_current_state_); }
 
-  int get_index() { return subst_idx_; }
+  double get_omega() { return est_omega_; }
 
-  double get_lambda() { return lowest_lambda_; }
+  double get_factor() { return est_factor_; }
+
+  double get_error() { return est_error_; }
 
 private:
   bool debug_{true};
@@ -128,9 +130,13 @@ private:
   uint_fast8_t num_stored_;
   int subst_idx_;  // Substitution index
 
-  double fint_new_;       // f_{int} new sample (filtered)
-  double lowest_lambda_;  // `H` lowest eigen value
+  double est_error_;
   double min_lambda_;     // temporary min lambda
+  double lowest_lambda_;  // `H` lowest eigen value
+  double fint_new_;       // f_{int} new sample (filtered)
+
+  double est_omega_;   // estimated natural frequency
+  double est_factor_;  // estimated damping factor
 
   Eigen::Vector3d zspace_new_point_;                         // zspace (e, de, dde) new point
   Eigen::Matrix3d zTz_new_;                                  // z.T * z (new)
