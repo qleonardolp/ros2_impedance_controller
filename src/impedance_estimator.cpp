@@ -59,12 +59,6 @@ int ImpedanceEstimator::update_state(
   // Check data integrity
   if (deviation.hasNaN() || twist.hasNaN() || accel.hasNaN() || wrench.hasNaN()) return 1;
 
-  uint_fast8_t bitmask = ((abs(deviation(axis_)) < kDeviationThreshold) << 3) |
-                         ((abs(twist(axis_)) < kTwistDevThreshold) << 2) |
-                         ((abs(accel(axis_)) < kAccelDevThreshold) << 1) |
-                         (abs(wrench(axis_)) < kIntEffortThreshold);
-  fsm_current_state_ = StateLUT[bitmask];
-
   de_state_ = A_svf_ * e_state_ + B_svf_ * accel(axis_);
   dfint_state_ = A_svf_ * fint_state_ + B_svf_ * wrench(axis_);
 
@@ -72,8 +66,18 @@ int ImpedanceEstimator::update_state(
   e_state_ += de_state_ * delta_t_;
   fint_state_ += dfint_state_ * delta_t_;
 
-  zspace_new_point_ << deviation(axis_), twist(axis_), e_state_(0);
-  fint_new_ = fint_state_(0);
+  dev_filt_ = deviation(axis_);
+  twist_filt_ = twist(axis_);
+
+  uint_fast8_t bitmask =
+    ((abs(dev_filt_) < kDeviationThreshold) << 3) | ((abs(twist_filt_) < kTwistDevThreshold) << 2) |
+    ((abs(e_state_(0)) < kAccelDevThreshold) << 1) | (abs(fint_state_(0)) < kIntEffortThreshold);
+  fsm_current_state_ = StateLUT[bitmask];
+  // Update zspace point accordingly
+  (this->*threshold_table_[get_fsm_state()])();
+
+  // zspace_new_point_ << deviation(axis_), twist(axis_), e_state_(0);
+  // fint_new_ = fint_state_(0);
   return 0;
 }
 
@@ -136,8 +140,6 @@ int ImpedanceEstimator::update()
 
   dt_theta_.noalias() = Gamma_ * grad_;
   // Projection operator (component-wise)
-  // TODO(@qleonardolp): use fsm_current_state_ to force
-  // projection accordingly, updating k, d, or m when properly
   for (uint i = 0; i < kParamsDim; ++i)
   {
     if (theta_hat_(i) >= theta_ub_(i) && dt_theta_(i) > 0.0)
@@ -160,6 +162,37 @@ int ImpedanceEstimator::update()
   est_factor_ = 2 * 0.78 * std::sqrt(theta_hat_(0) * theta_hat_(2));
 
   return 0;
+}
+
+void ImpedanceEstimator::fill_nullspace_point()
+{
+  zspace_new_point_.setZero();
+  fint_new_ = 0;
+}
+
+void ImpedanceEstimator::fill_free_motion_point()
+{
+  zspace_new_point_ << dev_filt_, twist_filt_, e_state_(0);
+  fint_new_ = 0;
+}
+
+void ImpedanceEstimator::fill_dynamic_point()
+{
+  // TODO(@me): create dev and twist class members
+  zspace_new_point_ << dev_filt_, twist_filt_, e_state_(0);
+  fint_new_ = fint_state_(0);
+}
+
+void ImpedanceEstimator::fill_static_point()
+{
+  zspace_new_point_ << dev_filt_, 0.0, 0.0;
+  fint_new_ = fint_state_(0);
+}
+
+void ImpedanceEstimator::fill_equilibrium_point()
+{
+  zspace_new_point_ << 0.0, 0.0, e_state_(0);
+  fint_new_ = fint_state_(0);
 }
 
 }  // namespace ros2_impedance_controller

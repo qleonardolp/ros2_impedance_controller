@@ -310,7 +310,7 @@ void MPCIController::publish_status()
 
   status_msg_.data[6] = estimator_->get_solution()(0);
   status_msg_.data[7] = estimator_->get_solution()(1);
-  status_msg_.data[8] = estimator_->get_omega();
+  status_msg_.data[8] = estimator_->get_solution()(2);
   status_msg_.data[9] = estimator_->get_factor();
   status_msg_.data[10] = estimator_->get_error();
 

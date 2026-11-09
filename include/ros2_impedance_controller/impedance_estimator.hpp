@@ -23,9 +23,9 @@
 namespace ros2_impedance_controller
 {
 const double kDeviationThreshold = 0.002;
-const double kTwistDevThreshold = 0.010;
-const double kAccelDevThreshold = 0.080;
-const double kIntEffortThreshold = 1.00;
+const double kTwistDevThreshold = 0.030;
+const double kAccelDevThreshold = 0.300;
+const double kIntEffortThreshold = 2.00;
 
 const uint8_t kParamsDim = 3;  // [k d m]
 
@@ -113,6 +113,28 @@ private:
 
   State fsm_current_state_;  // Finite State Machine current state
 
+  void fill_nullspace_point();
+
+  void fill_free_motion_point();
+
+  void fill_dynamic_point();
+
+  void fill_static_point();
+
+  void fill_equilibrium_point();
+
+  // Class method pointer
+  using Functor = void (ImpedanceEstimator::*)();
+
+  // Dispatch Table
+  static constexpr Functor threshold_table_[] = {
+    &ImpedanceEstimator::fill_nullspace_point,    // 0: NULLSPACE
+    &ImpedanceEstimator::fill_free_motion_point,  // 1: FREE_MOTION
+    &ImpedanceEstimator::fill_dynamic_point,      // 2: DYNAMIC_INT
+    &ImpedanceEstimator::fill_static_point,       // 3: STATIC_INT
+    &ImpedanceEstimator::fill_equilibrium_point   // 4: EQUILIBRIUM
+  };
+
   // State Variable Filter (2nd order low-pass)
   Eigen::Matrix2d A_svf_;  // SVF state space A
   Eigen::Vector2d B_svf_;  // SVF state space B
@@ -133,7 +155,9 @@ private:
   double est_error_;
   double min_lambda_;     // temporary min lambda
   double lowest_lambda_;  // `H` lowest eigen value
-  double fint_new_;       // f_{int} new sample (filtered)
+  double twist_filt_;
+  double dev_filt_;
+  double fint_new_;  // f_{int} new sample (filtered)
 
   double est_omega_;   // estimated natural frequency
   double est_factor_;  // estimated damping factor
